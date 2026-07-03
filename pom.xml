@@ -40,7 +40,7 @@
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-websocket</artifactId>
         </dependency>
-        <!-- WebSocket 安全性：提供 MessageMatcherDelegatingAuthorizationManager（Finding 3）-->
+        <!-- WebSocket 安全性：提供 MessageMatcherDelegatingAuthorizationManager -->
         <dependency>
             <groupId>org.springframework.security</groupId>
             <artifactId>spring-security-messaging</artifactId>

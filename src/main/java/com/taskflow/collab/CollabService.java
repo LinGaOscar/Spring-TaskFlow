@@ -7,7 +7,7 @@ import java.util.concurrent.ConcurrentHashMap;
 @Service
 public class CollabService {
 
-    // 依 spec 定義的色板（Finding 5）
+    // 依 spec 定義的色板
     private static final String[] COLORS = {
         "#e74c3c", "#3498db", "#2ecc71", "#f39c12",
         "#9b59b6", "#1abc9c", "#e67e22", "#34495e"
@@ -16,15 +16,10 @@ public class CollabService {
     // boardId → (userId → PresenceMessage)，記憶體內追蹤在線用戶，重啟後清空不影響資料
     public final Map<Long, Map<Long, PresenceMessage>> sessions = new ConcurrentHashMap<>();
 
-    // 使用位元遮罩確保非負數，避免 userId 為負數時造成陣列越界（Finding 1）
+    // 使用位元遮罩確保非負數，避免 userId 為負數時造成陣列越界
     public String userColor(Long userId) {
         int colorIndex = (int) (userId & 0x7FFFFFFFL) % COLORS.length;
         return COLORS[colorIndex];
-    }
-
-    // getUserColor 為 userColor 的別名，供 CollabController join/leave 端點呼叫
-    public String getUserColor(Long userId) {
-        return userColor(userId);
     }
 
     // 加入時寫入記憶體 sessions，同一用戶重複加入只覆蓋不重複

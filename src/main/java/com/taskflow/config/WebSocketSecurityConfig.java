@@ -10,7 +10,7 @@ import org.springframework.security.config.annotation.web.socket.EnableWebSocket
 import org.springframework.security.messaging.access.intercept.MessageMatcherDelegatingAuthorizationManager;
 
 /**
- * WebSocket 安全設定：確保所有 STOMP 連線、訂閱、訊息均需通過身份驗證（Finding 3）
+ * WebSocket 安全設定：確保所有 STOMP 連線、訂閱、訊息均需通過身份驗證
  * Spring Security 6.x 使用 @EnableWebSocketSecurity + AuthorizationManager 取代舊 AbstractSecurityWebSocketMessageBrokerConfigurer
  */
 @Configuration
@@ -32,7 +32,7 @@ public class WebSocketSecurityConfig {
      * 禁用 STOMP CSRF 檢查：
      * - SockJS 使用 HttpOnly session cookie（已受保護）
      * - Spring Session 提供 session 層級身份驗證
-     * - CSRF 在 session 式驗證下是冗餘的（Finding 4 修正）
+     * - CSRF 在 session 式驗證下是冗餘的
      */
     @Bean("csrfChannelInterceptor")
     public ChannelInterceptor csrfChannelInterceptor() {
