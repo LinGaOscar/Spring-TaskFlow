@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="zh-TW">
+<head>
+  <meta charset="UTF-8"><title>任務模板管理</title>
+  <link rel="stylesheet" th:href="@{/css/app.css}">
+  <meta name="_csrf" th:content="${_csrf.token}">
+  <meta name="_csrf_header" th:content="${_csrf.headerName}">
+</head>
+<body>
+  <div th:replace="~{fragments/header :: header}"></div>
+  <div class="layout">
+    <div th:replace="~{fragments/sidebar :: sidebar}"></div>
+    <main class="main-content" id="app">
+      <div class="page-header">
+        <h2>任務模板管理</h2>
+        <button v-if="canManage" class="btn btn-primary" style="width:auto" @click="openCreate">＋ 新增模板</button>
+      </div>
+      <div v-if="error" class="alert alert-error">{{ error }}</div>
+
+      <table class="data-table" v-if="templates.length">
+        <thead>
+          <tr>
+            <th>模板名稱</th>
+            <th>任務標題</th>
+            <th>優先級</th>
+            <th>類型</th>
+            <th>操作</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="t in templates" :key="t.id">
+            <td>{{ t.name }}</td>
+            <td>{{ t.title }}</td>
+            <td>{{ priorityLabel(t.priority) }}</td>
+            <td>{{ t.system ? '系統' : '自訂' }}</td>
+            <td>
+              <!-- 系統模板全員唯讀，不提供編輯／刪除；自訂模板僅本科科長／Leader 可操作 -->
+              <template v-if="canManage && !t.system">
+                <button class="btn btn-sm" @click="openEdit(t)">編輯</button>
+                <button class="btn btn-sm btn-danger" @click="removeTemplate(t)">刪除</button>
+              </template>
+              <span v-else style="color:#b2bec3">-</span>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+      <p v-else style="color:#636e72">尚無模板</p>
+
+      <div v-if="modal.open" class="modal-overlay" @click.self="modal.open=false">
+        <div class="modal">
+          <h3>{{ modal.id ? '編輯模板' : '新增模板' }}</h3>
+          <div class="form-group">
+            <label>名稱</label>
+            <input v-model="modal.name" autofocus>
+          </div>
+          <div class="form-group">
+            <label>標題</label>
+            <input v-model="modal.title">
+          </div>
+          <div class="form-group">
+            <label>描述</label>
+            <textarea v-model="modal.description" rows="3" style="width:100%;padding:0.6rem 0.8rem;border:1px solid #b2bec3;border-radius:4px;font-size:0.95rem"></textarea>
+          </div>
+          <div class="form-group">
+            <label>優先級</label>
+            <select v-model="modal.priority">
+              <option value="HIGH">高</option>
+              <option value="MEDIUM">中</option>
+              <option value="LOW">低</option>
+            </select>
+          </div>
+          <div class="modal-actions">
+            <button class="btn btn-primary" style="width:auto" @click="submit">{{ modal.id ? '儲存' : '建立' }}</button>
+            <button class="btn" @click="modal.open=false">取消</button>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+  <div th:replace="~{fragments/footer :: footer}"></div>
+
+  <script th:src="@{/js/vue.global.prod.min.js}"></script>
+  <script th:inline="javascript">
+    const CSRF_HEADER = /*[[${_csrf.headerName}]]*/ 'X-CSRF-TOKEN';
+    const CSRF_TOKEN  = /*[[${_csrf.token}]]*/ '';
+    const USER_ROLE   = /*[[${#authentication.principal.authorities[0].authority}]]*/ '';
+  </script>
+  <script>
+    const { createApp, ref, computed, onMounted } = Vue;
+    const h   = () => ({ 'Content-Type': 'application/json', [CSRF_HEADER]: CSRF_TOKEN });
+    const api = (url, opt={}) => fetch(url, { headers: h(), ...opt }).then(r => r.json());
+    const PRIORITY_LABEL = { HIGH: '高', MEDIUM: '中', LOW: '低' };
+
+    createApp({
+      setup() {
+        const templates = ref([]);
+        const error     = ref('');
+        const modal      = ref({ open: false, id: null, name: '', title: '', description: '', priority: 'MEDIUM' });
+        // 僅科長／看板 Leader 可管理本科自訂模板，權限字串沿用 CustomUserDetailsService 的 ROLE_ 前綴
+        const canManage = computed(() => USER_ROLE === 'ROLE_SECTION_CHIEF' || USER_ROLE === 'ROLE_PROJECT_LEADER');
+
+        function priorityLabel(p) { return PRIORITY_LABEL[p] || p; }
+
+        async function load() {
+          const d = await api('/api/templates');
+          if (d.success) templates.value = d.data;
+          else error.value = d.message || '載入失敗';
+        }
+
+        function openCreate() {
+          modal.value = { open: true, id: null, name: '', title: '', description: '', priority: 'MEDIUM' };
+        }
+
+        function openEdit(t) {
+          modal.value = { open: true, id: t.id, name: t.name, title: t.title, description: t.description || '', priority: t.priority };
+        }
+
+        async function submit() {
+          const body = JSON.stringify({
+            name: modal.value.name, title: modal.value.title,
+            description: modal.value.description, priority: modal.value.priority
+          });
+          const url    = modal.value.id ? `/api/templates/${modal.value.id}` : '/api/templates';
+          const method = modal.value.id ? 'PUT' : 'POST';
+          const d = await api(url, { method, body });
+          if (d.success) { modal.value.open = false; load(); }
+          else error.value = d.message || '儲存失敗';
+        }
+
+        async function removeTemplate(t) {
+          if (!confirm(`確定刪除模板「${t.name}」？`)) return;
+          const d = await api(`/api/templates/${t.id}`, { method: 'DELETE' });
+          if (d.success) load();
+          else error.value = d.message || '刪除失敗';
+        }
+
+        onMounted(load);
+        return { templates, error, modal, canManage, priorityLabel,
+                  openCreate, openEdit, submit, removeTemplate };
+      }
+    }).mount('#app');
+  </script>
+</body>
+</html>
