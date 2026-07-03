@@ -138,6 +138,21 @@ class TaskServiceTest {
     }
 
     @Test
+    void 跨看板操作任務_IDOR被拒() {
+        // IDOR 迴歸：拿 boardA 的任務改用 boardB 的 id 呼叫，必須視同任務不存在，
+        // 防止以自己有權限的看板 id 繞過權限閘操作他板任務
+        Task t = taskService.createTask(board.getId(), save("A板任務"), chief);
+        var reqB = new com.taskflow.board.BoardDto.CreateRequest();
+        reqB.setName("看板B");
+        Board boardB = boardService.createBoard(reqB, chief.getId());
+
+        assertThatThrownBy(() -> taskService.updateTask(boardB.getId(), t.getId(), save("竄改"), chief))
+            .isInstanceOf(jakarta.persistence.EntityNotFoundException.class);
+        assertThatThrownBy(() -> taskService.deleteTask(boardB.getId(), t.getId(), chief))
+            .isInstanceOf(jakarta.persistence.EntityNotFoundException.class);
+    }
+
+    @Test
     void 歸檔看板_所有寫入被拒() {
         Task t = taskService.createTask(board.getId(), save("先建"), chief);
         boardService.archiveBoard(board.getId(), chief);
