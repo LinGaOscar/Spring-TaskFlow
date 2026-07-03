@@ -119,6 +119,8 @@ window.boardPage = createApp({
             this.stomp.connect({}, () => {
                 this.stomp.subscribe(`/topic/board/${boardId}/tasks`, f => this.onTaskMessage(JSON.parse(f.body)));
                 this.stomp.subscribe(`/topic/board/${boardId}/presence`, f => this.onPresence(JSON.parse(f.body)));
+                // /app 前綴訂閱只回給本人：取得訂閱當下的在線初始清單（@SubscribeMapping）
+                this.stomp.subscribe(`/app/board/${boardId}/presence`, f => this.onPresence(JSON.parse(f.body)));
                 this.stomp.send(`/app/board/${boardId}/join`, {}, '');
             });
             window.addEventListener('beforeunload', () =>
@@ -138,6 +140,8 @@ window.boardPage = createApp({
             }
         },
         onPresence(msg) {
+            // 陣列＝訂閱時只回給本人的初始在線清單，整份覆蓋
+            if (Array.isArray(msg)) { this.onlineUsers = msg; return; }
             if (msg.type === 'LEAVE') {
                 this.onlineUsers = this.onlineUsers.filter(u => u.userId !== msg.userId);
             } else if (!this.onlineUsers.some(u => u.userId === msg.userId)) {

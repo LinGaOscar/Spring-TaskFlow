@@ -131,6 +131,13 @@ class TaskServiceTest {
     }
 
     @Test
+    void 空白標題建立任務_被拒() {
+        // WebSocket 路徑不經 Bean Validation，服務層必須自行擋下空標題
+        assertThatThrownBy(() -> taskService.createTask(board.getId(), save("   "), member))
+            .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
     void 刪除任務() {
         Task t = taskService.createTask(board.getId(), save("刪我"), member);
         taskService.deleteTask(board.getId(), t.getId(), member);

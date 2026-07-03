@@ -8,8 +8,10 @@ import com.taskflow.user.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.messaging.handler.annotation.*;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
+import org.springframework.messaging.simp.annotation.SubscribeMapping;
 import org.springframework.stereotype.Controller;
 import java.security.Principal;
+import java.util.List;
 
 @Controller
 @RequiredArgsConstructor
@@ -29,6 +31,13 @@ public class CollabController {
     private void checkWrite(Long boardId, User user) {
         if (!boardService.canWriteBoard(boardId, user)) {
             throw new SecurityException("無編輯此看板的權限");
+        }
+    }
+
+    // presence 加入/離開也要過讀取閘：防止直接 publish /app/board/{id}/join 混入跨科看板在線清單
+    private void checkRead(Long boardId, User user) {
+        if (!boardService.canReadBoard(boardId, user)) {
+            throw new SecurityException("無檢視此看板的權限");
         }
     }
 
@@ -91,10 +100,18 @@ public class CollabController {
         broadcast(boardId, TaskChangeMessage.Type.TASK_DELETE, taskId, null, user);
     }
 
+    // 訂閱 presence 時只回給訂閱者本人當前在線清單，避免每次 join 對全頻道重播造成廣播風暴
+    // （訂閱授權由 BoardSubscribeAuthInterceptor 統一把關）
+    @SubscribeMapping("/board/{boardId}/presence")
+    public List<PresenceMessage> onSubscribePresence(@DestinationVariable Long boardId) {
+        return collabService.getOnlineUsers(boardId);
+    }
+
     // SockJS 無法攔截 onConnect，前端連線後主動 publish join 以補足 presence 廣播
     @MessageMapping("/board/{boardId}/join")
     public void handleJoin(@DestinationVariable Long boardId, Principal principal) {
         User user = resolve(principal);
+        checkRead(boardId, user);
         collabService.join(boardId, user.getId(), user.getDisplayName());
         PresenceMessage msg = new PresenceMessage();
         msg.setType(PresenceMessage.Type.JOIN);
@@ -102,14 +119,12 @@ public class CollabController {
         msg.setDisplayName(user.getDisplayName());
         msg.setColor(collabService.userColor(user.getId()));
         broker.convertAndSend("/topic/board/" + boardId + "/presence", msg);
-        // 回送目前在線清單給剛加入者（透過同一 topic 廣播全量清單，前端以 userId 去重）
-        collabService.getOnlineUsers(boardId).forEach(p ->
-            broker.convertAndSend("/topic/board/" + boardId + "/presence", p));
     }
 
     @MessageMapping("/board/{boardId}/leave")
     public void handleLeave(@DestinationVariable Long boardId, Principal principal) {
         User user = resolve(principal);
+        checkRead(boardId, user);
         collabService.leave(boardId, user.getId());
         PresenceMessage msg = new PresenceMessage();
         msg.setType(PresenceMessage.Type.LEAVE);

@@ -96,6 +96,10 @@ public class TaskService {
     }
 
     private void applyFields(Task t, TaskDto.SaveRequest req, Long boardId) {
+        // 服務層守住標題必填：WebSocket 路徑不經 Bean Validation，不能只靠 DTO 的 @NotBlank
+        if (req.getTitle() == null || req.getTitle().isBlank()) {
+            throw new IllegalArgumentException("標題不可為空");
+        }
         t.setTitle(req.getTitle());
         t.setDescription(req.getDescription());
         t.setDueDate(req.getDueDate());

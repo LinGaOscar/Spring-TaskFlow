@@ -89,4 +89,18 @@ class CollabControllerMoveTest {
             collabController.onTaskMove(board.getId(), task.getId(), mv, principalOf(outsider)))
             .isInstanceOf(SecurityException.class);
     }
+
+    @Test
+    void 跨科成員join_presence_被拒() {
+        // 部門隔離延伸到 presence：越權 join 不得混入他科看板的在線清單
+        Department sec2 = new Department(); sec2.setName("資訊科2"); departmentRepository.save(sec2);
+        User outsider = new User();
+        outsider.setEmail("out2@t.com"); outsider.setPasswordHash("x");
+        outsider.setDisplayName("外人2"); outsider.setRole(User.Role.PROJECT_MEMBER); outsider.setDepartment(sec2);
+        userRepository.save(outsider);
+
+        assertThatThrownBy(() ->
+            collabController.handleJoin(board.getId(), principalOf(outsider)))
+            .isInstanceOf(SecurityException.class);
+    }
 }
