@@ -50,11 +50,18 @@ public class BoardController {
         return "board/history";
     }
 
-    // 只有科長或 Leader 才能進入成員管理頁，其他角色導回看板列表
+    // 只有科長或 Leader 才能進入成員管理頁，其他角色（含部長）導回看板列表
+    // 可管理範圍：科長看本科全部看板，Leader 只看自己負責的看板，避免越權操作他人看板成員
     @GetMapping("/admin/members")
-    public String membersPage(@AuthenticationPrincipal UserDetails userDetails) {
+    public String membersPage(Model model, @AuthenticationPrincipal UserDetails userDetails) {
         User user = userRepository.findByEmail(userDetails.getUsername()).orElseThrow();
         if (!user.canManageSection()) return "redirect:/boards";
+        List<BoardDto.Response> boards = boardService.listForUser(user, false).stream()
+            .filter(b -> user.getRole() == User.Role.SECTION_CHIEF
+                || (b.getOwner() != null && b.getOwner().getId().equals(user.getId())))
+            .map(BoardDto.Response::from)
+            .toList();
+        model.addAttribute("boards", boards);
         return "admin/members";
     }
 

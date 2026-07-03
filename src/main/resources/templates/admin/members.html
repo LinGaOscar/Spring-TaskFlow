@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <title>成員管理</title>
+  <link rel="stylesheet" th:href="@{/css/app.css}">
+  <style>
+    .board-card { background:#fff; border-radius:8px; padding:1.25rem 1.5rem; margin-bottom:1rem; box-shadow:0 1px 4px rgba(0,0,0,0.08); }
+    .board-header { display:flex; justify-content:space-between; align-items:center; cursor:pointer; user-select:none; }
+    .board-header h3 { font-size:1rem; margin:0; }
+    .board-meta { font-size:0.82rem; color:#636e72; font-weight:400; margin-left:0.5rem; }
+    .board-body { margin-top:1rem; border-top:1px solid #f0f0f0; padding-top:1rem; display:grid; grid-template-columns:1fr 1fr; gap:1.5rem; }
+    .section-label { font-size:0.78rem; font-weight:700; color:#b2bec3; text-transform:uppercase; letter-spacing:0.05em; margin-bottom:0.5rem; }
+    /* 負責人 */
+    .owner-row { display:flex; align-items:center; gap:0.5rem; }
+    .owner-select { flex:1; padding:0.35rem 0.6rem; border:1px solid #b2bec3; border-radius:4px; font-size:0.85rem; }
+    /* 成員標籤 */
+    .member-tag { display:inline-flex; align-items:center; gap:0.4rem; background:#f5f6fa; border:1px solid #dfe6e9; border-radius:20px; padding:0.3rem 0.75rem; font-size:0.85rem; margin:0.25rem; }
+    .member-tag.is-owner { background:#e8f4fd; border-color:#b2d4f0; }
+    .remove-btn { background:none; border:none; cursor:pointer; color:#b2bec3; font-size:1rem; line-height:1; padding:0; }
+    .remove-btn:hover { color:#e17055; }
+    .add-row { display:flex; gap:0.5rem; margin-top:0.75rem; }
+    .add-row select { flex:1; padding:0.4rem 0.6rem; border:1px solid #b2bec3; border-radius:4px; font-size:0.85rem; }
+    @media (max-width:700px) { .board-body { grid-template-columns:1fr; } }
+  </style>
+</head>
+<body>
+  <div th:replace="~{fragments/header :: header}"></div>
+  <div class="layout">
+    <div th:replace="~{fragments/sidebar :: sidebar}"></div>
+    <main class="main-content" id="app">
+    <div class="page-header">
+      <h2>成員管理</h2>
+    </div>
+    <div v-if="error" class="alert alert-error">{{ error }}</div>
+    <p v-if="!boards.length" style="color:#636e72">尚無可管理的看板。</p>
+
+    <div v-for="b in boards" :key="b.id" class="board-card">
+      <!-- 標頭列 -->
+      <div class="board-header" @click="toggle(b.id)">
+        <h3>{{ b.name }}
+          <span class="board-meta">{{ b.departmentName }}</span>
+        </h3>
+        <span style="color:#b2bec3;font-size:0.8rem">{{ expanded.has(b.id) ? '▲' : '▼' }}</span>
+      </div>
+
+      <!-- 展開區：兩欄 -->
+      <div v-if="expanded.has(b.id)" class="board-body">
+
+        <!-- 左欄：看板負責人 -->
+        <div>
+          <div class="section-label">看板負責人</div>
+          <div class="owner-row">
+            <select class="owner-select" v-model="ownerDraft[b.id]">
+              <option v-for="u in allUsers" :key="u.id" :value="u.id">
+                {{ u.displayName }}（{{ u.departmentName || '無部門' }}）
+              </option>
+            </select>
+            <button class="btn btn-sm btn-primary" style="width:auto"
+                    @click="changeOwner(b)"
+                    :disabled="ownerDraft[b.id] === b.ownerId">確認</button>
+          </div>
+          <p style="font-size:0.8rem;color:#636e72;margin-top:0.4rem">
+            目前：{{ b.ownerName || '未指定' }}
+          </p>
+        </div>
+
+        <!-- 右欄：看板成員 -->
+        <div>
+          <div class="section-label">看板成員</div>
+          <div>
+            <span v-for="m in memberMap[b.id] || []" :key="m.userId"
+                  class="member-tag" :class="{'is-owner': m.userId === b.ownerId}">
+              {{ m.displayName }}
+              <button class="remove-btn" @click="removeMember(b.id, m.userId)" title="移除">×</button>
+            </span>
+            <span v-if="!(memberMap[b.id]?.length)" style="color:#b2bec3;font-size:0.85rem">尚無成員</span>
+          </div>
+          <!-- 新增成員：本科優先 -->
+          <div class="add-row">
+            <select v-model="addingUser[b.id]">
+              <option value="">— 新增成員 —</option>
+              <optgroup v-if="availableGroups(b.id).sameDept.length" label="本科">
+                <option v-for="u in availableGroups(b.id).sameDept" :key="u.id" :value="u.id">
+                  {{ u.displayName }}
+                </option>
+              </optgroup>
+              <optgroup v-if="availableGroups(b.id).others.length" label="其他科">
+                <option v-for="u in availableGroups(b.id).others" :key="u.id" :value="u.id">
+                  {{ u.displayName }}（{{ u.departmentName || '無部門' }}）
+                </option>
+              </optgroup>
+            </select>
+            <button class="btn btn-sm btn-primary" style="width:auto"
+                    @click="addMember(b.id)" :disabled="!addingUser[b.id]">新增</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+  </div>
+  <div th:replace="~{fragments/footer :: footer}"></div>
+
+  <script th:src="@{/js/vue.global.prod.min.js}"></script>
+  <script th:inline="javascript">
+    const CSRF_HEADER = /*[[${_csrf.headerName}]]*/ 'X-CSRF-TOKEN';
+    const CSRF_TOKEN  = /*[[${_csrf.token}]]*/ '';
+    // 看板清單改由後端依角色過濾好再渲染（科長本科全部、Leader 僅自己負責的），
+    // 避免前端呼叫通用 /api/boards 造成 Leader 看到不該管理的其他看板
+    const INITIAL_BOARDS = /*[[${boards}]]*/ [];
+  </script>
+  <script>
+    const { createApp, ref, reactive, onMounted } = Vue;
+    const h   = () => ({ 'Content-Type': 'application/json', [CSRF_HEADER]: CSRF_TOKEN });
+    const api = (url, opt={}) => fetch(url, { headers: h(), ...opt }).then(r => r.json());
+
+    createApp({
+      setup() {
+        const boards      = ref(INITIAL_BOARDS);
+        const allUsers    = ref([]);
+        const currentUser = ref(null);
+        const memberMap   = reactive({});
+        const addingUser  = reactive({});
+        const ownerDraft  = reactive({});
+        const expanded    = ref(new Set());
+        const error       = ref('');
+
+        async function loadUsers() {
+          const [ud, me] = await Promise.all([api('/api/users'), api('/api/users/me')]);
+          if (ud.success) allUsers.value = ud.data;
+          if (me.success) currentUser.value = me.data;
+        }
+
+        async function loadMembers(boardId) {
+          const d = await api(`/api/boards/${boardId}/members`);
+          if (d.success) memberMap[boardId] = d.data;
+        }
+
+        function toggle(boardId) {
+          const s = new Set(expanded.value);
+          if (s.has(boardId)) {
+            s.delete(boardId);
+          } else {
+            s.add(boardId);
+            if (!memberMap[boardId]) loadMembers(boardId);
+            // 預設負責人草稿為目前負責人
+            const b = boards.value.find(x => x.id === boardId);
+            if (b && !ownerDraft[boardId]) ownerDraft[boardId] = b.ownerId;
+          }
+          expanded.value = s;
+        }
+
+        function availableGroups(boardId) {
+          const memberIds = new Set((memberMap[boardId] || []).map(m => m.userId));
+          const myDept = currentUser.value?.departmentName;
+          const candidates = allUsers.value.filter(u => !memberIds.has(u.id));
+          return {
+            sameDept: candidates.filter(u => u.departmentName === myDept),
+            others:   candidates.filter(u => u.departmentName !== myDept)
+          };
+        }
+
+        // 後端 PUT /api/boards/{id}/owner 讀取 body 的 userId 欄位，非 ownerId
+        async function changeOwner(b) {
+          const userId = ownerDraft[b.id];
+          if (!userId || userId === b.ownerId) return;
+          const d = await api(`/api/boards/${b.id}/owner`, {
+            method: 'PUT', body: JSON.stringify({ userId })
+          });
+          if (d.success) {
+            const updated = allUsers.value.find(u => u.id === userId);
+            b.ownerId   = userId;
+            b.ownerName = updated?.displayName || '';
+          } else {
+            error.value = d.message || '變更失敗';
+          }
+        }
+
+        async function addMember(boardId) {
+          const userId = addingUser[boardId];
+          if (!userId) return;
+          const d = await api(`/api/boards/${boardId}/members`, {
+            method: 'POST', body: JSON.stringify({ userId })
+          });
+          if (d.success) { addingUser[boardId] = ''; loadMembers(boardId); }
+          else error.value = d.message || '新增失敗';
+        }
+
+        async function removeMember(boardId, userId) {
+          if (!confirm('確定移除此成員？')) return;
+          const d = await api(`/api/boards/${boardId}/members/${userId}`, { method: 'DELETE' });
+          if (d.success) loadMembers(boardId);
+          else error.value = d.message || '移除失敗';
+        }
+
+        onMounted(loadUsers);
+        return { boards, allUsers, memberMap, addingUser, ownerDraft, expanded, error,
+                 toggle, availableGroups, changeOwner, addMember, removeMember };
+      }
+    }).mount('#app');
+  </script>
+</body>
+</html>
