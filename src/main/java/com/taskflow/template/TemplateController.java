@@ -6,7 +6,6 @@ import com.taskflow.user.UserRepository;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Controller;
-import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.*;
 import java.security.Principal;
 import java.util.List;
@@ -22,12 +21,9 @@ public class TemplateController {
         return userRepository.findByEmail(principal.getName()).orElseThrow();
     }
 
-    // 頁面殼：清單由前端以 Model 直接渲染（模板數量少，不需另起 API 拉取）
+    // 頁面殼：資料由前端 API 非同步載入（與 BoardController 看板列表頁同模式）
     @GetMapping("/templates")
-    public String page(Model model, Principal principal) {
-        model.addAttribute("templates",
-            templateService.listVisible(currentUser(principal)).stream()
-                .map(TemplateDto.Response::from).toList());
+    public String page() {
         return "template/list";
     }
 
