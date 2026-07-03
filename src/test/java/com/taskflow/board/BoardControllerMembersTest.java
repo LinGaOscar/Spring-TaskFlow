@@ -10,12 +10,15 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.http.MediaType;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 
 import static org.hamcrest.Matchers.hasSize;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 @SpringBootTest
@@ -129,5 +132,33 @@ class BoardControllerMembersTest {
             .andExpect(status().isOk())
             .andExpect(view().name("admin/members"))
             .andExpect(model().attribute("boards", hasSize(1)));
+    }
+
+    // 部門隔離旁路防護：科長雖有權管理本科看板成員，但目標帳號若屬於其他科，仍應被拒絕加入
+    @Test
+    @WithMockUser(username = "chief@t.com")
+    void addMember_跨科帳號被拒() throws Exception {
+        Department otherDept = new Department();
+        otherDept.setName("他科");
+        departmentRepository.save(otherDept);
+
+        User outsider = new User();
+        outsider.setEmail("outsider@t.com");
+        outsider.setPasswordHash("x");
+        outsider.setDisplayName("Outsider");
+        outsider.setRole(User.Role.PROJECT_MEMBER);
+        outsider.setDepartment(otherDept);
+        userRepository.save(outsider);
+
+        Board boardA = boardRepository.findAll().stream()
+            .filter(b -> b.getName().equals("Leader A 的看板"))
+            .findFirst().orElseThrow();
+
+        mockMvc.perform(post("/api/boards/{id}/members", boardA.getId())
+                .with(csrf())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"userId\":" + outsider.getId() + "}"))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.success").value(false));
     }
 }

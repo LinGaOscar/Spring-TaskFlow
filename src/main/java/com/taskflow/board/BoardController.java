@@ -202,7 +202,15 @@ public class BoardController {
         if (!isSectionChief && !isBoardOwner) {
             throw new SecurityException("只有科長或看板負責人才可管理成員");
         }
-        boardService.addMember(id, body.get("userId"), caller.getId());
+        Long targetUserId = body.get("userId");
+        User targetUser = userRepository.findById(targetUserId)
+            .orElseThrow(() -> new EntityNotFoundException("使用者不存在"));
+        // 成員必須與看板同科，避免跨科帳號被加入看板成員造成部門隔離被繞過
+        if (board.getDepartment() == null || targetUser.getDepartment() == null
+            || !board.getDepartment().getId().equals(targetUser.getDepartment().getId())) {
+            throw new IllegalArgumentException("成員必須為本科帳號");
+        }
+        boardService.addMember(id, targetUserId, caller.getId());
         return ApiResponse.ok(null);
     }
 
@@ -241,7 +249,15 @@ public class BoardController {
             && board.getDepartment().getId().equals(caller.getDepartment().getId());
         boolean isBoardOwner = board.getOwner().getId().equals(caller.getId());
         if (!isSectionChief && !isBoardOwner) throw new SecurityException("無權變更負責人");
-        boardService.changeOwner(id, body.get("userId"));
+        Long newOwnerId = body.get("userId");
+        User newOwner = userRepository.findById(newOwnerId)
+            .orElseThrow(() -> new EntityNotFoundException("使用者不存在"));
+        // 新負責人必須與看板同科，避免跨科指派負責人造成部門隔離被繞過
+        if (board.getDepartment() == null || newOwner.getDepartment() == null
+            || !board.getDepartment().getId().equals(newOwner.getDepartment().getId())) {
+            throw new IllegalArgumentException("負責人必須為本科帳號");
+        }
+        boardService.changeOwner(id, newOwnerId);
         return ApiResponse.ok(null);
     }
 }

@@ -6,7 +6,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.ActiveProfiles;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -18,67 +17,47 @@ class UserServiceTest {
     @Autowired UserService userService;
     @Autowired UserRepository userRepository;
     @Autowired DepartmentRepository deptRepository;
-    @Autowired PasswordEncoder passwordEncoder;
+
+    Department deptA, deptB;
 
     @BeforeEach
     void setup() {
         userRepository.deleteAll();
         deptRepository.deleteAll();
-        Department dept = new Department();
-        dept.setName("資訊部");
-        deptRepository.save(dept);
+        deptA = new Department(); deptA.setName("資訊科"); deptRepository.save(deptA);
+        deptB = new Department(); deptB.setName("業務科"); deptRepository.save(deptB);
     }
 
-    @Test
-    void createUser_savesWithHashedPassword() {
-        UserDto.CreateRequest req = new UserDto.CreateRequest();
-        req.setEmail("user@test.com");
-        req.setPassword("secret123");
-        req.setDisplayName("測試使用者");
-        req.setRole(User.Role.PROJECT_MEMBER);
-
-        User created = userService.createUser(req);
-
-        assertThat(created.getId()).isNotNull();
-        assertThat(passwordEncoder.matches("secret123", created.getPasswordHash())).isTrue();
+    private User saveUser(String email, Department dept, boolean enabled) {
+        User u = new User();
+        u.setEmail(email);
+        u.setPasswordHash("x");
+        u.setDisplayName(email);
+        u.setRole(User.Role.PROJECT_MEMBER);
+        u.setDepartment(dept);
+        u.setEnabled(enabled);
+        return userRepository.save(u);
     }
 
+    // 成員管理限科內帳號：跨科帳號不應出現在清單中，避免被誤加入本科看板成員（部門隔離旁路）
     @Test
-    void sectionChief_canCreateBoard() {
-        UserDto.CreateRequest req = new UserDto.CreateRequest();
-        req.setEmail("chief@test.com");
-        req.setPassword("pass");
-        req.setDisplayName("科長");
-        req.setRole(User.Role.SECTION_CHIEF);
-        User user = userService.createUser(req);
+    void listUsers_onlyReturnsSameDepartmentUsers() {
+        saveUser("a@t.com", deptA, true);
+        saveUser("b@t.com", deptB, true);
 
-        assertThat(user.canCreateBoard()).isTrue();
+        var result = userService.listUsers(deptA.getId());
+
+        assertThat(result).extracting(User::getEmail).containsExactly("a@t.com");
     }
 
+    // 停用帳號不應出現在成員選單，避免離職人員仍可被加入看板
     @Test
-    void projectMember_cannotCreateBoard() {
-        UserDto.CreateRequest req = new UserDto.CreateRequest();
-        req.setEmail("mem@test.com");
-        req.setPassword("pass");
-        req.setDisplayName("成員");
-        req.setRole(User.Role.PROJECT_MEMBER);
-        User user = userService.createUser(req);
+    void listUsers_excludesDisabledUsers() {
+        saveUser("active@t.com", deptA, true);
+        saveUser("disabled@t.com", deptA, false);
 
-        assertThat(user.canCreateBoard()).isFalse();
-    }
+        var result = userService.listUsers(deptA.getId());
 
-    @Test
-    void disableUser_setsEnabledFalse() {
-        UserDto.CreateRequest req = new UserDto.CreateRequest();
-        req.setEmail("old@test.com");
-        req.setPassword("pass");
-        req.setDisplayName("舊員工");
-        req.setRole(User.Role.PROJECT_MEMBER);
-        User user = userService.createUser(req);
-
-        userService.disableUser(user.getId());
-
-        User updated = userRepository.findById(user.getId()).orElseThrow();
-        assertThat(updated.isEnabled()).isFalse();
+        assertThat(result).extracting(User::getEmail).containsExactly("active@t.com");
     }
 }

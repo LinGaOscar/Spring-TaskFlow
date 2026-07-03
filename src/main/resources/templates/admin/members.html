@@ -76,20 +76,13 @@
             </span>
             <span v-if="!(memberMap[b.id]?.length)" style="color:#b2bec3;font-size:0.85rem">尚無成員</span>
           </div>
-          <!-- 新增成員：本科優先 -->
+          <!-- 新增成員：/api/users 已由後端限定只回傳本科帳號，前端不需再分組 -->
           <div class="add-row">
             <select v-model="addingUser[b.id]">
               <option value="">— 新增成員 —</option>
-              <optgroup v-if="availableGroups(b.id).sameDept.length" label="本科">
-                <option v-for="u in availableGroups(b.id).sameDept" :key="u.id" :value="u.id">
-                  {{ u.displayName }}
-                </option>
-              </optgroup>
-              <optgroup v-if="availableGroups(b.id).others.length" label="其他科">
-                <option v-for="u in availableGroups(b.id).others" :key="u.id" :value="u.id">
-                  {{ u.displayName }}（{{ u.departmentName || '無部門' }}）
-                </option>
-              </optgroup>
+              <option v-for="u in availableUsers(b.id)" :key="u.id" :value="u.id">
+                {{ u.displayName }}
+              </option>
             </select>
             <button class="btn btn-sm btn-primary" style="width:auto"
                     @click="addMember(b.id)" :disabled="!addingUser[b.id]">新增</button>
@@ -118,17 +111,16 @@
       setup() {
         const boards      = ref(INITIAL_BOARDS);
         const allUsers    = ref([]);
-        const currentUser = ref(null);
         const memberMap   = reactive({});
         const addingUser  = reactive({});
         const ownerDraft  = reactive({});
         const expanded    = ref(new Set());
         const error       = ref('');
 
+        // /api/users 已由後端限定只回傳本科帳號，故不需再另外查詢當前使用者做分組比對
         async function loadUsers() {
-          const [ud, me] = await Promise.all([api('/api/users'), api('/api/users/me')]);
-          if (ud.success) allUsers.value = ud.data;
-          if (me.success) currentUser.value = me.data;
+          const d = await api('/api/users');
+          if (d.success) allUsers.value = d.data;
         }
 
         async function loadMembers(boardId) {
@@ -150,14 +142,10 @@
           expanded.value = s;
         }
 
-        function availableGroups(boardId) {
+        // /api/users 已由後端限定只回傳本科帳號，這裡只需排除已是成員的人
+        function availableUsers(boardId) {
           const memberIds = new Set((memberMap[boardId] || []).map(m => m.userId));
-          const myDept = currentUser.value?.departmentName;
-          const candidates = allUsers.value.filter(u => !memberIds.has(u.id));
-          return {
-            sameDept: candidates.filter(u => u.departmentName === myDept),
-            others:   candidates.filter(u => u.departmentName !== myDept)
-          };
+          return allUsers.value.filter(u => !memberIds.has(u.id));
         }
 
         // 後端 PUT /api/boards/{id}/owner 讀取 body 的 userId 欄位，非 ownerId
@@ -195,7 +183,7 @@
 
         onMounted(loadUsers);
         return { boards, allUsers, memberMap, addingUser, ownerDraft, expanded, error,
-                 toggle, availableGroups, changeOwner, addMember, removeMember };
+                 toggle, availableUsers, changeOwner, addMember, removeMember };
       }
     }).mount('#app');
   </script>

@@ -1,5 +1,8 @@
 package com.taskflow.user;
 
+import com.taskflow.department.Department;
+import com.taskflow.department.DepartmentRepository;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -18,10 +21,30 @@ class UserControllerTest {
 
     @Autowired MockMvc mockMvc;
     @Autowired UserRepository userRepository;
+    @Autowired DepartmentRepository departmentRepository;
+
+    @AfterEach
+    void tearDown() {
+        userRepository.deleteAll();
+        departmentRepository.deleteAll();
+    }
 
     @Test
-    @WithMockUser(roles = "SECTION_CHIEF")
+    @WithMockUser(username = "chief@t.com", roles = "SECTION_CHIEF")
     void listUsers_authenticated_returns200() throws Exception {
+        // /api/users 現在依呼叫者 department 過濾，需先建立與 @WithMockUser username 對應的資料庫使用者
+        Department dept = new Department();
+        dept.setName("資訊科");
+        departmentRepository.save(dept);
+
+        User user = new User();
+        user.setEmail("chief@t.com");
+        user.setPasswordHash("x");
+        user.setDisplayName("Chief");
+        user.setRole(User.Role.SECTION_CHIEF);
+        user.setDepartment(dept);
+        userRepository.save(user);
+
         mockMvc.perform(get("/api/users"))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.success").value(true));

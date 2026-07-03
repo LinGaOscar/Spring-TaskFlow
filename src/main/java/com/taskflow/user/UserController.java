@@ -4,7 +4,6 @@ import com.taskflow.common.ApiResponse;
 import com.taskflow.department.Department;
 import com.taskflow.department.DepartmentRepository;
 import jakarta.persistence.EntityNotFoundException;
-import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.core.userdetails.UserDetails;
@@ -21,16 +20,6 @@ public class UserController {
     private final UserRepository userRepository;
     private final DepartmentRepository departmentRepository;
 
-    @GetMapping("/admin/users")
-    public String usersPage(@AuthenticationPrincipal UserDetails userDetails) {
-        User user = userRepository.findByEmail(userDetails.getUsername()).orElseThrow();
-        // 只有科長以上可管理人員
-        if (user.getRole() != User.Role.SECTION_CHIEF && user.getRole() != User.Role.DIRECTOR) {
-            return "redirect:/boards";
-        }
-        return "admin/users";
-    }
-
     @GetMapping("/api/users/me")
     @ResponseBody
     public ApiResponse<UserDto.Response> getCurrentUser(
@@ -40,40 +29,20 @@ public class UserController {
         return ApiResponse.ok(UserDto.Response.from(user));
     }
 
+    // 成員管理限科內帳號：只回傳呼叫者本科（同 department）的啟用帳號，避免跨科帳號被
+    // 誤加入本科看板成員（部門隔離旁路）。DIRECTOR 掛在部層級，這裡僅回傳同 department（部本身，
+    // 不含子科），與看板成員的同科驗證邏輯一致，也是最簡單的實作方式
     @GetMapping("/api/users")
     @ResponseBody
-    public ApiResponse<List<UserDto.Response>> listUsers() {
-        return ApiResponse.ok(userService.listUsers().stream()
+    public ApiResponse<List<UserDto.Response>> listUsers(
+            @AuthenticationPrincipal UserDetails userDetails) {
+        User caller = userRepository.findByEmail(userDetails.getUsername())
+            .orElseThrow(() -> new EntityNotFoundException("使用者不存在"));
+        if (caller.getDepartment() == null) {
+            return ApiResponse.ok(List.of());
+        }
+        return ApiResponse.ok(userService.listUsers(caller.getDepartment().getId()).stream()
             .map(UserDto.Response::from).toList());
-    }
-
-    @PostMapping("/api/users")
-    @ResponseBody
-    public ApiResponse<UserDto.Response> createUser(
-            @Valid @RequestBody UserDto.CreateRequest req,
-            @AuthenticationPrincipal UserDetails userDetails) {
-        checkManagePermission(userDetails);
-        return ApiResponse.ok(UserDto.Response.from(userService.createUser(req)));
-    }
-
-    @PutMapping("/api/users/{id}")
-    @ResponseBody
-    public ApiResponse<UserDto.Response> updateUser(
-            @PathVariable Long id,
-            @RequestBody UserDto.UpdateRequest req,
-            @AuthenticationPrincipal UserDetails userDetails) {
-        checkManagePermission(userDetails);
-        return ApiResponse.ok(UserDto.Response.from(userService.updateUser(id, req)));
-    }
-
-    @DeleteMapping("/api/users/{id}")
-    @ResponseBody
-    public ApiResponse<Void> disableUser(
-            @PathVariable Long id,
-            @AuthenticationPrincipal UserDetails userDetails) {
-        checkManagePermission(userDetails);
-        userService.disableUser(id);
-        return ApiResponse.ok(null);
     }
 
     @GetMapping("/api/departments")
@@ -83,12 +52,5 @@ public class UserController {
         return ApiResponse.ok(depts.stream()
             .map(d -> Map.<String, Object>of("id", d.getId(), "name", d.getName()))
             .toList());
-    }
-
-    private void checkManagePermission(UserDetails userDetails) {
-        User caller = userRepository.findByEmail(userDetails.getUsername()).orElseThrow();
-        if (caller.getRole() != User.Role.SECTION_CHIEF && caller.getRole() != User.Role.DIRECTOR) {
-            throw new SecurityException("無權管理人員");
-        }
     }
 }

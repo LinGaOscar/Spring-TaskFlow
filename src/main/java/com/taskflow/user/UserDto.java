@@ -1,27 +1,8 @@
 package com.taskflow.user;
 
-import jakarta.validation.constraints.Email;
-import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotNull;
 import lombok.Data;
 
 public class UserDto {
-
-    @Data
-    public static class CreateRequest {
-        @Email @NotBlank private String email;
-        @NotBlank private String password;
-        @NotBlank private String displayName;
-        private Long departmentId;
-        @NotNull private User.Role role;
-    }
-
-    @Data
-    public static class UpdateRequest {
-        private String displayName;
-        private Long departmentId;
-        private User.Role role;
-    }
 
     @Data
     public static class Response {
