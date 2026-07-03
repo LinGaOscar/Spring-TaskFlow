@@ -28,8 +28,9 @@
             <span>負責人：{{ p.ownerName }}</span>
             <span v-if="p.departmentName">｜{{ p.departmentName }}</span>
           </div>
-          <!-- 歸檔按鈕（hover 才顯示，只有 canCreate 身份才看得到） -->
-          <button v-if="canCreate" class="btn btn-sm archive-btn"
+          <!-- 歸檔按鈕（hover 才顯示）：與後端 checkArchivePermission 對齊，僅看板負責人或同科科長可見，
+               避免部長／非負責人 Leader 看到點了必失敗的按鈕，誤以為自己有權限 -->
+          <button v-if="canArchive(p)" class="btn btn-sm archive-btn"
                   @click.stop="archive(p)"
                   title="歸檔此看板">歸檔</button>
         </div>
@@ -70,6 +71,7 @@
         const error     = ref('');
         const modal     = ref({ open: false, name: '' });
         const canCreate = ref(false);
+        const me        = ref({ id: null, role: null });
 
         async function load() {
           const d = await api('/api/boards');
@@ -78,6 +80,14 @@
 
         function openCreate() { modal.value = { open: true, name: '' }; }
         function go(id) { window.location.href = `/boards/${id}`; }
+
+        // 與後端 BoardService.checkArchivePermission 對齊：科長可歸檔本科任何看板（清單本就只列本科），
+        // Leader 僅限自己負責的看板，部長完全不可歸檔（即使清單含跨科唯讀看板）
+        function canArchive(p) {
+          if (me.value.role === 'SECTION_CHIEF') return true;
+          if (me.value.role === 'PROJECT_LEADER') return p.ownerId === me.value.id;
+          return false;
+        }
 
         async function submit() {
           const d = await api('/api/boards', {
@@ -97,11 +107,14 @@
         onMounted(() => {
           load();
           api('/api/users/me').then(d => {
-            if (d.success) canCreate.value = d.data.canCreateBoard;
+            if (d.success) {
+              canCreate.value = d.data.canCreateBoard;
+              me.value = { id: d.data.id, role: d.data.role };
+            }
           }).catch(() => {});
         });
 
-        return { boards, error, modal, canCreate, openCreate, go, submit, archive };
+        return { boards, error, modal, canCreate, canArchive, openCreate, go, submit, archive };
       }
     }).mount('#app');
   </script>

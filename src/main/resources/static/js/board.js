@@ -112,19 +112,26 @@ window.boardPage = createApp({
             location.reload();
         },
         // ---- 寫入操作：透過 STOMP 送出，伺服端驗證權限後廣播全體，本機畫面靠訂閱回饋更新 ----
+        // 注意：靜態資源用的是 @stomp/stompjs UMD 版本，全域變數為 StompJs（非舊版 Stomp），需用 Client 物件 API
         connectWs() {
             const sock = new SockJS('/ws');
-            this.stomp = Stomp.over(sock);
-            this.stomp.debug = null;   // 關閉冗長 log
-            this.stomp.connect({}, () => {
-                this.stomp.subscribe(`/topic/board/${boardId}/tasks`, f => this.onTaskMessage(JSON.parse(f.body)));
-                this.stomp.subscribe(`/topic/board/${boardId}/presence`, f => this.onPresence(JSON.parse(f.body)));
+            const client = new StompJs.Client({ webSocketFactory: () => sock });
+            client.debug = () => {};   // 關閉冗長 log
+            client.onConnect = () => {
+                client.subscribe(`/topic/board/${boardId}/tasks`, f => this.onTaskMessage(JSON.parse(f.body)));
+                client.subscribe(`/topic/board/${boardId}/presence`, f => this.onPresence(JSON.parse(f.body)));
                 // /app 前綴訂閱只回給本人：取得訂閱當下的在線初始清單（@SubscribeMapping）
-                this.stomp.subscribe(`/app/board/${boardId}/presence`, f => this.onPresence(JSON.parse(f.body)));
-                this.stomp.send(`/app/board/${boardId}/join`, {}, '');
+                client.subscribe(`/app/board/${boardId}/presence`, f => this.onPresence(JSON.parse(f.body)));
+                client.publish({ destination: `/app/board/${boardId}/join`, body: '' });
+            };
+            client.activate();
+            this.stomp = client;
+            window.addEventListener('beforeunload', () => {
+                if (client.connected) {
+                    client.publish({ destination: `/app/board/${boardId}/leave`, body: '' });
+                    client.deactivate();
+                }
             });
-            window.addEventListener('beforeunload', () =>
-                this.stomp.send(`/app/board/${boardId}/leave`, {}, ''));
         },
         onTaskMessage(msg) {
             // MOVE 帶全板快照直接覆蓋；其餘按類型增量更新，確保多人畫面一致
@@ -149,18 +156,18 @@ window.boardPage = createApp({
             }
         },
         sendCreate(form) {
-            this.stomp.send(`/app/board/${boardId}/task/create`, {}, JSON.stringify(form));
+            this.stomp.publish({ destination: `/app/board/${boardId}/task/create`, body: JSON.stringify(form) });
         },
         sendUpdate(taskId, form) {
-            this.stomp.send(`/app/board/${boardId}/task/update`,
-                { taskId: taskId }, JSON.stringify(form));
+            this.stomp.publish({ destination: `/app/board/${boardId}/task/update`,
+                headers: { taskId: String(taskId) }, body: JSON.stringify(form) });
         },
         sendMove(taskId, status, targetIndex) {
-            this.stomp.send(`/app/board/${boardId}/task/${taskId}/move`, {},
-                JSON.stringify({ status, targetIndex }));
+            this.stomp.publish({ destination: `/app/board/${boardId}/task/${taskId}/move`,
+                body: JSON.stringify({ status, targetIndex }) });
         },
         sendDelete(taskId) {
-            this.stomp.send(`/app/board/${boardId}/task/${taskId}/delete`, {}, '');
+            this.stomp.publish({ destination: `/app/board/${boardId}/task/${taskId}/delete`, body: '' });
         },
     },
     mounted() { this.loadAll(); this.connectWs(); },
