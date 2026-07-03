@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<body>
+<footer th:fragment="footer" class="footer">
+  <p>TaskFlow 任務管理系統 &copy; 2026</p>
+  <script>
+    (function() {
+      const path = window.location.pathname;
+      document.querySelectorAll('.sidebar a').forEach(function(a) {
+        const href = a.getAttribute('href');
+        if (!href) return;
+        const match =
+          href === '/boards/history' ? path === '/boards/history' :
+          href === '/boards'         ? path === '/boards' || (path.startsWith('/boards/') && path !== '/boards/history') :
+          path === href || path.startsWith(href + '/');
+        if (match) a.classList.add('active');
+      });
+    })();
+  </script>
+</footer>
+</body>
+</html>

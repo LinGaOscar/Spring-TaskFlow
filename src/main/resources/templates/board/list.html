@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="zh-TW">
+<head>
+  <meta charset="UTF-8"><title>看板列表</title>
+  <link rel="stylesheet" th:href="@{/css/app.css}">
+  <style>
+    .archive-btn { position:absolute; top:0.6rem; right:0.6rem; padding:0.2rem 0.5rem; font-size:0.75rem; opacity:0; transition:opacity 0.15s; }
+    .board-card:hover .archive-btn { opacity:1; }
+    .board-card { position:relative; }
+  </style>
+</head>
+<body>
+  <div th:replace="~{fragments/header :: header}"></div>
+  <div class="layout">
+    <div th:replace="~{fragments/sidebar :: sidebar}"></div>
+    <main class="main-content" id="app">
+      <div class="page-header">
+        <h2>我的看板</h2>
+        <button class="btn btn-primary" style="width:auto" @click="openCreate"
+                v-if="canCreate">新增看板</button>
+      </div>
+      <div v-if="error" class="alert alert-error">{{ error }}</div>
+      <div class="board-grid" v-if="boards.length">
+        <div class="board-card" v-for="p in boards" :key="p.id"
+             @click="go(p.id)">
+          <div class="board-card-name">{{ p.name }}</div>
+          <div class="board-card-meta">
+            <span>負責人：{{ p.ownerName }}</span>
+            <span v-if="p.departmentName">｜{{ p.departmentName }}</span>
+          </div>
+          <!-- 歸檔按鈕（hover 才顯示，只有 canCreate 身份才看得到） -->
+          <button v-if="canCreate" class="btn btn-sm archive-btn"
+                  @click.stop="archive(p)"
+                  title="歸檔此看板">歸檔</button>
+        </div>
+      </div>
+      <p v-else style="color:#636e72">尚無看板</p>
+
+      <div v-if="modal.open" class="modal-overlay" @click.self="modal.open=false">
+        <div class="modal">
+          <h3>新增看板</h3>
+          <div class="form-group">
+            <label>看板名稱</label>
+            <input v-model="modal.name" autofocus>
+          </div>
+          <div class="modal-actions">
+            <button class="btn btn-primary" style="width:auto" @click="submit">建立</button>
+            <button class="btn" @click="modal.open=false">取消</button>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+  <div th:replace="~{fragments/footer :: footer}"></div>
+
+  <script th:src="@{/js/vue.global.prod.min.js}"></script>
+  <script th:inline="javascript">
+    const CSRF_HEADER = /*[[${_csrf.headerName}]]*/ 'X-CSRF-TOKEN';
+    const CSRF_TOKEN  = /*[[${_csrf.token}]]*/ '';
+    const USER_ROLE   = /*[[${#authentication.principal.authorities[0].authority}]]*/ '';
+  </script>
+  <script>
+    const { createApp, ref, onMounted } = Vue;
+    const h   = () => ({ 'Content-Type': 'application/json', [CSRF_HEADER]: CSRF_TOKEN });
+    const api = (url, opt={}) => fetch(url, { headers: h(), ...opt }).then(r => r.json());
+
+    createApp({
+      setup() {
+        const boards  = ref([]);
+        const error     = ref('');
+        const modal     = ref({ open: false, name: '' });
+        const canCreate = ref(false);
+
+        async function load() {
+          const d = await api('/api/boards');
+          if (d.success) boards.value = d.data;
+        }
+
+        function openCreate() { modal.value = { open: true, name: '' }; }
+        function go(id) { window.location.href = `/boards/${id}`; }
+
+        async function submit() {
+          const d = await api('/api/boards', {
+            method: 'POST', body: JSON.stringify({ name: modal.value.name })
+          });
+          if (d.success) { modal.value.open = false; load(); }
+          else error.value = d.message;
+        }
+
+        async function archive(p) {
+          if (!confirm(`確定歸檔「${p.name}」？歸檔後看板將變為唯讀。`)) return;
+          const d = await api(`/api/boards/${p.id}/archive`, { method: 'POST' });
+          if (d.success) load();
+          else error.value = d.message || '歸檔失敗';
+        }
+
+        onMounted(() => {
+          load();
+          api('/api/users/me').then(d => {
+            if (d.success) canCreate.value = d.data.canCreateBoard;
+          }).catch(() => {});
+        });
+
+        return { boards, error, modal, canCreate, openCreate, go, submit, archive };
+      }
+    }).mount('#app');
+  </script>
+</body>
+</html>

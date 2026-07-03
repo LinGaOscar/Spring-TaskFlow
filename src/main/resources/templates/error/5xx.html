@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="zh-TW">
+<head><meta charset="UTF-8"><title>系統錯誤</title>
+  <link rel="stylesheet" th:href="@{/css/app.css}">
+</head>
+<body>
+  <div th:replace="~{fragments/header :: header}"></div>
+  <div class="layout">
+    <div th:replace="~{fragments/sidebar :: sidebar}"></div>
+    <main class="main-content">
+      <h2>系統發生錯誤</h2>
+      <p style="color:#636e72;margin-top:0.5rem">伺服器處理請求時發生問題，請稍後再試或聯絡系統管理員。</p>
+      <a th:href="@{/boards}">返回首頁</a>
+    </main>
+  </div>
+  <div th:replace="~{fragments/footer :: footer}"></div>
+</body>
+</html>

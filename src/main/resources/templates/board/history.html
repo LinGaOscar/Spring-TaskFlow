@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="zh-TW">
+<head>
+  <meta charset="UTF-8"><title>歷史看板</title>
+  <link rel="stylesheet" th:href="@{/css/app.css}">
+  <style>
+    .board-card { position:relative; opacity:0.85; }
+    .archived-badge { font-size:0.72rem; background:#dfe6e9; color:#636e72; border-radius:10px; padding:2px 8px; margin-left:0.5rem; vertical-align:middle; }
+    .restore-btn { position:absolute; top:0.6rem; right:0.6rem; padding:0.2rem 0.5rem; font-size:0.75rem; opacity:0; transition:opacity 0.15s; }
+    .board-card:hover .restore-btn { opacity:1; }
+  </style>
+</head>
+<body>
+  <div th:replace="~{fragments/header :: header}"></div>
+  <div class="layout">
+    <div th:replace="~{fragments/sidebar :: sidebar}"></div>
+    <main class="main-content" id="app">
+      <div class="page-header">
+        <h2>歷史看板</h2>
+      </div>
+      <form class="page-header" method="get" th:action="@{/boards/history}">
+          <div style="display:flex; gap:0.5rem; align-items:center;">
+              <input type="text" name="keyword" th:value="${keyword}" placeholder="搜尋看板名稱"
+                     style="padding:0.45rem 0.8rem; border:1px solid #b2bec3; border-radius:4px;">
+              <input type="date" name="from" th:value="${from}"
+                     style="padding:0.4rem; border:1px solid #b2bec3; border-radius:4px;">
+              <span>～</span>
+              <input type="date" name="to" th:value="${to}"
+                     style="padding:0.4rem; border:1px solid #b2bec3; border-radius:4px;">
+              <button type="submit" class="btn btn-primary btn-sm">查詢</button>
+          </div>
+      </form>
+      <div v-if="error" class="alert alert-error">{{ error }}</div>
+      <div class="board-grid" v-if="boards.length">
+        <div class="board-card" v-for="p in boards" :key="p.id"
+             @click="go(p.id)">
+          <div class="board-card-name">
+            {{ p.name }}
+            <span class="archived-badge">已歸檔</span>
+          </div>
+          <div class="board-card-meta">
+            <span>負責人：{{ p.ownerName }}</span>
+            <span v-if="p.departmentName">｜{{ p.departmentName }}</span>
+          </div>
+          <button v-if="canManage" class="btn btn-sm restore-btn"
+                  @click.stop="restore(p)"
+                  title="還原為進行中">還原</button>
+        </div>
+      </div>
+      <p v-else style="color:#636e72">尚無歷史看板。</p>
+    </main>
+  </div>
+  <div th:replace="~{fragments/footer :: footer}"></div>
+
+  <script th:src="@{/js/vue.global.prod.min.js}"></script>
+  <script th:inline="javascript">
+    const CSRF_HEADER = /*[[${_csrf.headerName}]]*/ 'X-CSRF-TOKEN';
+    const CSRF_TOKEN  = /*[[${_csrf.token}]]*/ '';
+  </script>
+  <script>
+    const { createApp, ref, onMounted } = Vue;
+    const h   = () => ({ 'Content-Type': 'application/json', [CSRF_HEADER]: CSRF_TOKEN });
+    const api = (url, opt={}) => fetch(url, { headers: h(), ...opt }).then(r => r.json());
+
+    createApp({
+      setup() {
+        const boards   = ref([]);
+        const error      = ref('');
+        const canManage  = ref(false);
+
+        async function load() {
+          const d = await api('/api/boards?archived=true');
+          if (d.success) boards.value = d.data;
+          else error.value = d.message;
+        }
+
+        function go(id) { window.location.href = `/boards/${id}`; }
+
+        async function restore(p) {
+          if (!confirm(`確定還原「${p.name}」為進行中看板？`)) return;
+          const d = await api(`/api/boards/${p.id}/unarchive`, { method: 'POST' });
+          if (d.success) load();
+          else error.value = d.message || '還原失敗';
+        }
+
+        onMounted(() => {
+          load();
+          api('/api/users/me').then(d => {
+            if (d.success) canManage.value = d.data.canCreateBoard;
+          }).catch(() => {});
+        });
+
+        return { boards, error, canManage, go, restore };
+      }
+    }).mount('#app');
+  </script>
+</body>
+</html>

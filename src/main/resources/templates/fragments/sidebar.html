@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+<body>
+<nav th:fragment="sidebar" class="sidebar">
+  <ul>
+    <li><a th:href="@{/boards}">看板列表</a></li>
+    <li><a th:href="@{/boards/history}">歷史區</a></li>
+    <li><a th:href="@{/templates}">任務模板</a></li>
+    <!-- 管理項僅科長與看板Leader可見；權限字串沿用 CustomUserDetailsService 的 ROLE_ 前綴設計，故用 hasAnyRole 而非 hasAnyAuthority -->
+    <li sec:authorize="hasAnyRole('SECTION_CHIEF','PROJECT_LEADER')">
+      <a th:href="@{/admin/members}">成員管理</a>
+    </li>
+  </ul>
+</nav>
+</body>
+</html>

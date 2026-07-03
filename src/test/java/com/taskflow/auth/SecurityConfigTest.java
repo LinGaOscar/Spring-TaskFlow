@@ -24,10 +24,9 @@ class SecurityConfigTest {
             .andExpect(redirectedUrlPattern("**/login"));
     }
 
-    // 此測試需渲染 auth/login 樣板，樣板檔由 Task 4（靜態資源與基礎版型）建立，
-    // Task 2 階段尚未建立故暫時停用，待 Task 4 完成後恢復。
-    // void loginPage_isPublic() throws Exception {
-    //     mockMvc.perform(get("/login"))
-    //         .andExpect(status().isOk());
-    // }
+    @Test
+    void loginPage_isPublic() throws Exception {
+        mockMvc.perform(get("/login"))
+            .andExpect(status().isOk());
+    }
 }
