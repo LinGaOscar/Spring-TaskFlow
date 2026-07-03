@@ -51,19 +51,18 @@ public class BoardController {
         return "admin/members";
     }
 
-    // 讀取權限驗證後注入 readOnly 旗標，Thymeleaf 將其寫入 JS 全域變數供 Vue 判斷
+    // 看板頁：SSR 只出骨架與權限旗標，任務資料由前端 REST/WebSocket 載入
     @GetMapping("/boards/{id}")
-    public String boardDetailPage(@PathVariable Long id, Model model,
-            @AuthenticationPrincipal UserDetails userDetails) {
-        User user = userRepository.findByEmail(userDetails.getUsername()).orElseThrow();
+    public String detail(@PathVariable Long id, Model model, Principal principal) {
+        User user = userRepository.findByEmail(principal.getName()).orElseThrow();
         try {
             if (!boardService.canReadBoard(id, user)) {
                 return "redirect:/boards";
             }
             Board board = boardService.getById(id);
-            boolean readOnly = !boardService.canWriteBoard(id, user);
             model.addAttribute("board", board);
-            model.addAttribute("readOnly", readOnly);
+            model.addAttribute("canWrite", boardService.canWriteBoard(id, user));
+            model.addAttribute("currentUserId", user.getId());
             return "board/detail";
         } catch (EntityNotFoundException e) {
             return "error/404";

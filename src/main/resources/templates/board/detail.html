@@ -1,21 +1,100 @@
 <!DOCTYPE html>
-<html xmlns:th="http://www.thymeleaf.org" lang="zh-TW">
+<html xmlns:th="http://www.thymeleaf.org">
 <head>
-  <meta charset="UTF-8"><title>看板詳情</title>
-  <link rel="stylesheet" th:href="@{/css/app.css}">
+    <meta charset="UTF-8">
+    <title th:text="${board.name} + ' - TaskFlow'">看板</title>
+    <link rel="stylesheet" th:href="@{/css/app.css}">
+    <link rel="stylesheet" th:href="@{/css/board.css}">
+    <meta name="_csrf" th:content="${_csrf.token}">
+    <meta name="_csrf_header" th:content="${_csrf.headerName}">
 </head>
 <body>
-  <div th:replace="~{fragments/header :: header}"></div>
-  <div class="layout">
+<div th:replace="~{fragments/header :: header}"></div>
+<div class="layout">
     <div th:replace="~{fragments/sidebar :: sidebar}"></div>
-    <main class="main-content">
-      <!-- 佔位頁：完整 Kanban 編輯器將於 Task 7 實作，此處僅確保路由與版型不出錯 -->
-      <div class="page-header">
-        <h2 th:text="${board.name}">看板名稱</h2>
-      </div>
-      <p style="color:#636e72" th:if="${readOnly}">此看板已歸檔，僅供檢視。</p>
+    <main class="main-content" id="board-app"
+          th:attr="data-board-id=${board.id},data-can-write=${canWrite},data-board-name=${board.name},data-archived=${board.archived}">
+        <div v-if="archived" class="archived-banner">此看板已歸檔，全部內容唯讀。</div>
+        <div class="page-header">
+            <h2>{{ boardName }}</h2>
+            <div class="board-toolbar">
+                <div class="presence-bar">
+                    <span v-for="u in onlineUsers" :key="u.userId" class="presence-avatar"
+                          :style="{background: u.color}" :title="u.displayName">{{ u.displayName[0] }}</span>
+                </div>
+                <button v-if="canWrite" class="btn btn-primary" @click="openCreate">＋ 新增任務</button>
+                <div class="export-dropdown">
+                    <button class="btn">匯出 ▾</button>
+                    <div class="dropdown-menu">
+                        <a class="dropdown-item" :href="exportUrl('json')">JSON</a>
+                        <a class="dropdown-item" :href="exportUrl('csv')">CSV</a>
+                        <a class="dropdown-item" :href="exportUrl('xlsx')">XLSX</a>
+                    </div>
+                </div>
+                <button v-if="canWrite" class="btn btn-danger" @click="archiveBoard">歸檔</button>
+            </div>
+        </div>
+        <div class="kanban">
+            <div v-for="col in columns" :key="col.status" class="kanban-col"
+                 :class="{'drag-over': dragOverCol === col.status}"
+                 @dragover.prevent="dragOverCol = col.status"
+                 @dragleave="dragOverCol = null"
+                 @drop="onDrop(col.status, $event)">
+                <div class="kanban-col-header">
+                    <span>{{ col.label }}</span>
+                    <span class="kanban-col-count">{{ tasksIn(col.status).length }}</span>
+                </div>
+                <div v-for="(t, idx) in tasksIn(col.status)" :key="t.id"
+                     class="task-card" :class="'priority-' + t.priority"
+                     :draggable="canWrite" @dragstart="onDragStart(t, $event)"
+                     @dragover.prevent="dragIndex = idx" @click="openEdit(t)">
+                    <div class="task-card-title">{{ t.title }}</div>
+                    <div class="task-card-meta">
+                        <span>{{ t.assigneeName || '未指派' }}</span>
+                        <span class="task-due" :class="{overdue: isOverdue(t)}"
+                              v-if="t.dueDate">{{ t.dueDate }}</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <!-- 任務編輯/新增 modal：欄位 標題/描述/負責人/到期日/優先級，新增時多「套用模板」下拉 -->
+        <div v-if="modal.open" class="modal-overlay" @click.self="modal.open = false">
+            <div class="modal">
+                <h3>{{ modal.taskId ? '編輯任務' : '新增任務' }}</h3>
+                <div class="form-group" v-if="!modal.taskId">
+                    <label>套用模板</label>
+                    <select v-model="modal.templateId" @change="applyTemplate">
+                        <option :value="null">— 不套用 —</option>
+                        <option v-for="tpl in templates" :key="tpl.id" :value="tpl.id">{{ tpl.name }}</option>
+                    </select>
+                </div>
+                <div class="form-group"><label>標題</label><input v-model="modal.form.title"></div>
+                <div class="form-group"><label>描述</label>
+                    <textarea v-model="modal.form.description" rows="4"
+                              style="width:100%; padding:0.6rem 0.8rem; border:1px solid #b2bec3; border-radius:4px;"></textarea></div>
+                <div class="form-group"><label>負責人</label>
+                    <select v-model="modal.form.assigneeId">
+                        <option :value="null">未指派</option>
+                        <option v-for="m in members" :key="m.userId" :value="m.userId">{{ m.displayName }}</option>
+                    </select></div>
+                <div class="form-group"><label>到期日</label><input type="date" v-model="modal.form.dueDate"></div>
+                <div class="form-group"><label>優先級</label>
+                    <select v-model="modal.form.priority">
+                        <option value="HIGH">高</option><option value="MEDIUM">中</option><option value="LOW">低</option>
+                    </select></div>
+                <div class="modal-actions">
+                    <button class="btn btn-primary" @click="saveTask" :disabled="!canWrite">儲存</button>
+                    <button v-if="modal.taskId && canWrite" class="btn btn-danger" @click="deleteTask">刪除</button>
+                    <button class="btn" @click="modal.open = false">取消</button>
+                </div>
+            </div>
+        </div>
     </main>
-  </div>
-  <div th:replace="~{fragments/footer :: footer}"></div>
+</div>
+<div th:replace="~{fragments/footer :: footer}"></div>
+<script th:src="@{/js/vue.global.prod.min.js}"></script>
+<script th:src="@{/js/sockjs.min.js}"></script>
+<script th:src="@{/js/stomp.min.js}"></script>
+<script th:src="@{/js/board.js}"></script>
 </body>
 </html>

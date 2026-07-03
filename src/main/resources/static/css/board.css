@@ -1,0 +1,26 @@
+/* Kanban 三欄版面：延續 app.css 的卡片視覺語言（圓角 8px、淡陰影、#f5f6fa 底） */
+.kanban { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; align-items: start; }
+.kanban-col { background: #ececf1; border-radius: 8px; padding: 0.75rem; min-height: 320px; }
+.kanban-col-header { display: flex; justify-content: space-between; align-items: center;
+    font-weight: 700; font-size: 0.9rem; color: #636e72; padding: 0.25rem 0.5rem 0.75rem; }
+.kanban-col-count { background: #b2bec3; color: #fff; border-radius: 10px;
+    padding: 0 0.55rem; font-size: 0.75rem; }
+.kanban-col.drag-over { outline: 2px dashed #0984e3; outline-offset: -4px; }
+
+/* 任務卡片：左側色條表優先級（高紅/中橙/低綠） */
+.task-card { background: #fff; border-radius: 6px; padding: 0.75rem 0.9rem; margin-bottom: 0.6rem;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.08); cursor: grab; border-left: 4px solid #b2bec3; }
+.task-card:active { cursor: grabbing; }
+.task-card.priority-HIGH   { border-left-color: #d63031; }
+.task-card.priority-MEDIUM { border-left-color: #e17055; }
+.task-card.priority-LOW    { border-left-color: #00b894; }
+.task-card-title { font-size: 0.95rem; font-weight: 600; margin-bottom: 0.4rem; }
+.task-card-meta { display: flex; justify-content: space-between; align-items: center;
+    font-size: 0.8rem; color: #636e72; }
+/* 逾期未完成以紅字警示，提醒到期風險 */
+.task-due.overdue { color: #d63031; font-weight: 700; }
+.task-card.dragging { opacity: 0.4; }
+
+.board-toolbar { display: flex; gap: 0.75rem; align-items: center; }
+.archived-banner { background: #ffeaa7; color: #6c5ce7; padding: 0.6rem 1rem;
+    border-radius: 6px; margin-bottom: 1rem; font-size: 0.9rem; }
