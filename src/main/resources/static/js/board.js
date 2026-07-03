@@ -69,7 +69,23 @@ window.boardPage = createApp({
         },
         onDragStart(t, ev) {
             this.dragging = t;
+            // 每次拖曳開始重置插入位置，避免沿用上一次拖曳殘留的 dragIndex
+            this.dragIndex = 0;
             ev.dataTransfer.effectAllowed = 'move';
+        },
+        onColDragOver(status) {
+            this.dragOverCol = status;
+            // 空欄或欄尾放置時預設插入尾端：卡片層級的 dragover 會再以精準位置覆蓋，
+            // 若無此預設，拖到空白區時 dragIndex 會殘留舊值，導致 sendMove 送錯 targetIndex
+            const count = this.tasksIn(status).length;
+            // 卡片若原本就在本欄，移動後欄內數量不變，尾端索引需扣掉自己
+            this.dragIndex = (this.dragging && this.dragging.status === status)
+                ? Math.max(0, count - 1) : count;
+        },
+        onCardDragOver(status, idx) {
+            // 懸停在卡片上時，以該卡片位置為插入點（.stop 阻擋冒泡，避免被欄層級的尾端預設覆蓋）
+            this.dragOverCol = status;
+            this.dragIndex = idx;
         },
         onDrop(status) {
             if (!this.dragging || !this.canWrite) return;

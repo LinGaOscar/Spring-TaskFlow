@@ -37,7 +37,7 @@
         <div class="kanban">
             <div v-for="col in columns" :key="col.status" class="kanban-col"
                  :class="{'drag-over': dragOverCol === col.status}"
-                 @dragover.prevent="dragOverCol = col.status"
+                 @dragover.prevent="onColDragOver(col.status)"
                  @dragleave="dragOverCol = null"
                  @drop="onDrop(col.status, $event)">
                 <div class="kanban-col-header">
@@ -47,7 +47,7 @@
                 <div v-for="(t, idx) in tasksIn(col.status)" :key="t.id"
                      class="task-card" :class="'priority-' + t.priority"
                      :draggable="canWrite" @dragstart="onDragStart(t, $event)"
-                     @dragover.prevent="dragIndex = idx" @click="openEdit(t)">
+                     @dragover.prevent.stop="onCardDragOver(col.status, idx)" @click="openEdit(t)">
                     <div class="task-card-title">{{ t.title }}</div>
                     <div class="task-card-meta">
                         <span>{{ t.assigneeName || '未指派' }}</span>
