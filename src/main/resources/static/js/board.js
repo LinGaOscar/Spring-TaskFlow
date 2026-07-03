@@ -111,11 +111,53 @@ window.boardPage = createApp({
                 { method: 'POST', headers: { [csrfHeader]: csrfToken } });
             location.reload();
         },
-        // ---- 寫入操作：Task 8 接上 STOMP，目前為唯讀展示骨架，故留空實作 ----
-        sendCreate(form) { /* Task 8 接上 STOMP */ },
-        sendUpdate(taskId, form) { /* Task 8 接上 STOMP */ },
-        sendMove(taskId, status, targetIndex) { /* Task 8 接上 STOMP */ },
-        sendDelete(taskId) { /* Task 8 接上 STOMP */ },
+        // ---- 寫入操作：透過 STOMP 送出，伺服端驗證權限後廣播全體，本機畫面靠訂閱回饋更新 ----
+        connectWs() {
+            const sock = new SockJS('/ws');
+            this.stomp = Stomp.over(sock);
+            this.stomp.debug = null;   // 關閉冗長 log
+            this.stomp.connect({}, () => {
+                this.stomp.subscribe(`/topic/board/${boardId}/tasks`, f => this.onTaskMessage(JSON.parse(f.body)));
+                this.stomp.subscribe(`/topic/board/${boardId}/presence`, f => this.onPresence(JSON.parse(f.body)));
+                this.stomp.send(`/app/board/${boardId}/join`, {}, '');
+            });
+            window.addEventListener('beforeunload', () =>
+                this.stomp.send(`/app/board/${boardId}/leave`, {}, ''));
+        },
+        onTaskMessage(msg) {
+            // MOVE 帶全板快照直接覆蓋；其餘按類型增量更新，確保多人畫面一致
+            if (msg.type === 'TASK_MOVE') { this.tasks = msg.payload; return; }
+            if (msg.type === 'TASK_CREATE') { this.tasks.push(msg.payload); return; }
+            if (msg.type === 'TASK_UPDATE') {
+                const i = this.tasks.findIndex(t => t.id === msg.taskId);
+                if (i >= 0) this.tasks[i] = msg.payload;
+                return;
+            }
+            if (msg.type === 'TASK_DELETE') {
+                this.tasks = this.tasks.filter(t => t.id !== msg.taskId);
+            }
+        },
+        onPresence(msg) {
+            if (msg.type === 'LEAVE') {
+                this.onlineUsers = this.onlineUsers.filter(u => u.userId !== msg.userId);
+            } else if (!this.onlineUsers.some(u => u.userId === msg.userId)) {
+                this.onlineUsers.push(msg);
+            }
+        },
+        sendCreate(form) {
+            this.stomp.send(`/app/board/${boardId}/task/create`, {}, JSON.stringify(form));
+        },
+        sendUpdate(taskId, form) {
+            this.stomp.send(`/app/board/${boardId}/task/update`,
+                { taskId: taskId }, JSON.stringify(form));
+        },
+        sendMove(taskId, status, targetIndex) {
+            this.stomp.send(`/app/board/${boardId}/task/${taskId}/move`, {},
+                JSON.stringify({ status, targetIndex }));
+        },
+        sendDelete(taskId) {
+            this.stomp.send(`/app/board/${boardId}/task/${taskId}/delete`, {}, '');
+        },
     },
-    mounted() { this.loadAll(); },
+    mounted() { this.loadAll(); this.connectWs(); },
 }).mount('#board-app');
