@@ -1,10 +1,12 @@
 <!DOCTYPE html>
-<html xmlns:th="http://www.thymeleaf.org" lang="zh-TW">
+<html xmlns:th="http://www.thymeleaf.org"
+      xmlns:sec="http://www.thymeleaf.org/extras/spring-security" lang="zh-TW">
 <head>
   <meta charset="UTF-8"><title>歷史看板</title>
   <link rel="stylesheet" th:href="@{/css/app.css}">
   <style>
     .board-card { position:relative; opacity:0.85; }
+    .board-card a { text-decoration:none; color:inherit; display:block; }
     .archived-badge { font-size:0.72rem; background:#dfe6e9; color:#636e72; border-radius:10px; padding:2px 8px; margin-left:0.5rem; vertical-align:middle; }
     .restore-btn { position:absolute; top:0.6rem; right:0.6rem; padding:0.2rem 0.5rem; font-size:0.75rem; opacity:0; transition:opacity 0.15s; }
     .board-card:hover .restore-btn { opacity:1; }
@@ -14,10 +16,11 @@
   <div th:replace="~{fragments/header :: header}"></div>
   <div class="layout">
     <div th:replace="~{fragments/sidebar :: sidebar}"></div>
-    <main class="main-content" id="app">
+    <main class="main-content">
       <div class="page-header">
         <h2>歷史看板</h2>
       </div>
+      <!-- 查詢列：GET 重載本頁，過濾由後端 BoardService.searchHistory 執行（含部門隔離） -->
       <form class="page-header" method="get" th:action="@{/boards/history}">
           <div style="display:flex; gap:0.5rem; align-items:center;">
               <input type="text" name="keyword" th:value="${keyword}" placeholder="搜尋看板名稱"
@@ -30,69 +33,45 @@
               <button type="submit" class="btn btn-primary btn-sm">查詢</button>
           </div>
       </form>
-      <div v-if="error" class="alert alert-error">{{ error }}</div>
-      <div class="board-grid" v-if="boards.length">
-        <div class="board-card" v-for="p in boards" :key="p.id"
-             @click="go(p.id)">
-          <div class="board-card-name">
-            {{ p.name }}
-            <span class="archived-badge">已歸檔</span>
-          </div>
-          <div class="board-card-meta">
-            <span>負責人：{{ p.ownerName }}</span>
-            <span v-if="p.departmentName">｜{{ p.departmentName }}</span>
-          </div>
-          <button v-if="canManage" class="btn btn-sm restore-btn"
-                  @click.stop="restore(p)"
+      <!-- 伺服器端渲染：boards 已由 Controller 依 keyword/from/to 過濾完成 -->
+      <div class="board-grid" th:if="${!boards.isEmpty()}">
+        <div class="board-card" th:each="b : ${boards}">
+          <a th:href="@{/boards/{id}(id=${b.id})}">
+            <div class="board-card-name">
+              <span th:text="${b.name}">看板名稱</span>
+              <span class="archived-badge">已歸檔</span>
+            </div>
+            <div class="board-card-meta">
+              <span th:text="'負責人：' + ${b.owner.displayName}">負責人</span>
+              <span th:if="${b.department != null}" th:text="'｜' + ${b.department.name}">部門</span>
+            </div>
+          </a>
+          <button sec:authorize="hasAnyRole('SECTION_CHIEF','PROJECT_LEADER')"
+                  class="btn btn-sm restore-btn"
+                  th:attr="data-id=${b.id},data-name=${b.name}"
+                  onclick="restoreBoard(this)"
                   title="還原為進行中">還原</button>
         </div>
       </div>
-      <p v-else style="color:#636e72">尚無歷史看板。</p>
+      <p th:if="${boards.isEmpty()}" style="color:#636e72">尚無歷史看板。</p>
     </main>
   </div>
   <div th:replace="~{fragments/footer :: footer}"></div>
 
-  <script th:src="@{/js/vue.global.prod.min.js}"></script>
   <script th:inline="javascript">
     const CSRF_HEADER = /*[[${_csrf.headerName}]]*/ 'X-CSRF-TOKEN';
     const CSRF_TOKEN  = /*[[${_csrf.token}]]*/ '';
-  </script>
-  <script>
-    const { createApp, ref, onMounted } = Vue;
-    const h   = () => ({ 'Content-Type': 'application/json', [CSRF_HEADER]: CSRF_TOKEN });
-    const api = (url, opt={}) => fetch(url, { headers: h(), ...opt }).then(r => r.json());
-
-    createApp({
-      setup() {
-        const boards   = ref([]);
-        const error      = ref('');
-        const canManage  = ref(false);
-
-        async function load() {
-          const d = await api('/api/boards?archived=true');
-          if (d.success) boards.value = d.data;
-          else error.value = d.message;
-        }
-
-        function go(id) { window.location.href = `/boards/${id}`; }
-
-        async function restore(p) {
-          if (!confirm(`確定還原「${p.name}」為進行中看板？`)) return;
-          const d = await api(`/api/boards/${p.id}/unarchive`, { method: 'POST' });
-          if (d.success) load();
-          else error.value = d.message || '還原失敗';
-        }
-
-        onMounted(() => {
-          load();
-          api('/api/users/me').then(d => {
-            if (d.success) canManage.value = d.data.canCreateBoard;
-          }).catch(() => {});
-        });
-
-        return { boards, error, canManage, go, restore };
-      }
-    }).mount('#app');
+    // 還原後重載頁面（保留查詢參數），權限最終仍由後端 unarchiveBoard 驗證
+    function restoreBoard(btn) {
+      const name = btn.dataset.name;
+      if (!confirm(`確定還原「${name}」為進行中看板？`)) return;
+      fetch(`/api/boards/${btn.dataset.id}/unarchive`, {
+        method: 'POST', headers: { [CSRF_HEADER]: CSRF_TOKEN }
+      }).then(r => r.json()).then(d => {
+        if (d.success) location.reload();
+        else alert(d.message || '還原失敗');
+      });
+    }
   </script>
 </body>
 </html>
