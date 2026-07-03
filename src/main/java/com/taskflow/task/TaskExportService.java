@@ -44,10 +44,10 @@ public class TaskExportService {
         return sb.toString();
     }
 
-    // RFC 4180：含逗號/引號/換行的欄位以雙引號包裹，內部引號翻倍
+    // RFC 4180：含逗號/引號/換行（LF 或裸 CR 皆會使消費端斷行）的欄位以雙引號包裹，內部引號翻倍
     private String csvField(String v) {
         if (v == null) return "";
-        if (v.contains(",") || v.contains("\"") || v.contains("\n")) {
+        if (v.contains(",") || v.contains("\"") || v.contains("\n") || v.contains("\r")) {
             return '"' + v.replace("\"", "\"\"") + '"';
         }
         return v;

@@ -33,6 +33,15 @@ class TaskExportServiceTest {
     }
 
     @Test
+    void csv_裸CR欄位需加引號防斷行() {
+        // 舊 Mac 風格文字貼上可能含裸 \r，未加引號會被多數 CSV 消費端誤判為換列
+        TaskDto.Response r = sample();
+        r.setTitle("進度\r更新");
+        String csv = exportService.toCsv(List.of(r));
+        assertThat(csv).contains("\"進度\r更新\"");
+    }
+
+    @Test
     void json_可序列化任務清單() {
         String json = exportService.toJson(List.of(sample()));
         assertThat(json).contains("\"title\"");
