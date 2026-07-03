@@ -145,6 +145,8 @@ public class BoardService {
     }
 
     // 系統最核心的安全閘：DIRECTOR 只能讀，不能改；歸檔看板對全員強制唯讀
+    // WebSocket 執行緒沒有 open-in-view，需自帶唯讀交易確保 LAZY 關聯（owner/department）可載入
+    @Transactional(readOnly = true)
     public boolean canWriteBoard(Long boardId, User user) {
         Board board = getById(boardId);
         // 歸檔看板全員唯讀
@@ -162,6 +164,8 @@ public class BoardService {
     }
 
     // 部長透過 parent 關聯查子科（部門樹兩層：部 → 科），科長/Leader 只看本科，Member 僅看被加入的
+    // WebSocket 執行緒沒有 open-in-view，需自帶唯讀交易確保 LAZY 關聯（department.parent）可載入
+    @Transactional(readOnly = true)
     public boolean canReadBoard(Long boardId, User user) {
         Board board = getById(boardId);
         return switch (user.getRole()) {
