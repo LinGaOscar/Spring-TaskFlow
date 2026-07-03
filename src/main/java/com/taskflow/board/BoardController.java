@@ -47,6 +47,8 @@ public class BoardController {
         model.addAttribute("keyword", keyword);
         model.addAttribute("from", from);
         model.addAttribute("to", to);
+        // 供頁面比對 PROJECT_LEADER 是否為看板負責人，決定是否顯示還原鈕（與後端 checkArchivePermission 對齊）
+        model.addAttribute("currentUserId", user.getId());
         return "board/history";
     }
 

@@ -46,7 +46,15 @@
               <span th:if="${b.department != null}" th:text="'｜' + ${b.department.name}">部門</span>
             </div>
           </a>
-          <button sec:authorize="hasAnyRole('SECTION_CHIEF','PROJECT_LEADER')"
+          <!-- 還原鈕顯示語意需與後端 checkArchivePermission 對齊：科長可還原本科任一看板；
+               Leader 僅限自己負責的看板，比對 ownerId 與目前使用者 id，避免看到點了必失敗的按鈕 -->
+          <button sec:authorize="hasRole('SECTION_CHIEF')"
+                  class="btn btn-sm restore-btn"
+                  th:attr="data-id=${b.id},data-name=${b.name}"
+                  onclick="restoreBoard(this)"
+                  title="還原為進行中">還原</button>
+          <button sec:authorize="hasRole('PROJECT_LEADER')"
+                  th:if="${b.owner != null and b.owner.id == currentUserId}"
                   class="btn btn-sm restore-btn"
                   th:attr="data-id=${b.id},data-name=${b.name}"
                   onclick="restoreBoard(this)"

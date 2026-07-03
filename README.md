@@ -39,7 +39,7 @@ SQL Server 2022（資料 + Session 儲存）
 |---|---|:---:|:---:|:---:|:---:|:---:|:---:|
 | `DIRECTOR` | 部長 | ✅（掛在部） | 僅自建看板 | 僅自建看板 | ❌ | ✅（唯讀） | ❌ |
 | `SECTION_CHIEF` | 科長 | ✅ | ✅（本科） | ✅（本科） | ✅ | ❌ | ✅（本科） |
-| `PROJECT_LEADER` | 看板 Leader | ✅ | 限加入的看板 | 限自己的看板 | ✅ | ❌ | ✅（本科） |
+| `PROJECT_LEADER` | 看板 Leader | ✅ | 限加入的看板 | 限自己的看板 | ✅ | ❌ | ✅（限自己負責的看板） |
 | `PROJECT_MEMBER` | 看板 Member | ❌ | 限加入的看板 | ❌ | ❌ | ❌ | ❌ |
 
 ### 部門隔離
@@ -90,8 +90,8 @@ java -jar target/spring-taskflow-*.jar
 |---|---|---|
 | 看板列表 | 依角色顯示可見看板卡片（`/boards`） | 全員 |
 | 新增看板 | 填寫名稱，建立後自動綁定所屬科 | DIRECTOR / SECTION_CHIEF / PROJECT_LEADER |
-| 歸檔看板 | 完成後移至歷史，全員強制唯讀 | SECTION_CHIEF / PROJECT_LEADER（本科） |
-| 還原歸檔 | 將歷史看板重新移回進行中 | SECTION_CHIEF / PROJECT_LEADER（本科） |
+| 歸檔看板 | 完成後移至歷史，全員強制唯讀 | SECTION_CHIEF（本科）/ PROJECT_LEADER（限自己負責的看板） |
+| 還原歸檔 | 將歷史看板重新移回進行中 | SECTION_CHIEF（本科）/ PROJECT_LEADER（限自己負責的看板） |
 | 歷史看板查詢 | 依關鍵字（看板名稱）與歸檔日期區間查詢（`/boards/history`） | 全員 |
 | 不存在看板 | 返回自訂 404 頁面，非 Whitelabel Error | — |
 
@@ -150,7 +150,7 @@ java -jar target/spring-taskflow-*.jar
 | 關鍵字查詢 | 依看板名稱模糊搜尋 |
 | 日期區間查詢 | 依歸檔日期篩選 |
 | 可見範圍 | 依部門隔離：Member 限被加入過的、科長 / Leader 限本科、部長全部（唯讀） |
-| 還原 | 科長 / Leader 可將本科看板還原為進行中 |
+| 還原 | 科長可還原本科任一看板；Leader 僅限自己負責的看板還原為進行中 |
 
 ---
 
