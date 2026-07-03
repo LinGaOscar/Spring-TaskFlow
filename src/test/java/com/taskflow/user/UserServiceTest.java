@@ -44,7 +44,7 @@ class UserServiceTest {
     }
 
     @Test
-    void sectionChief_canCreateProject() {
+    void sectionChief_canCreateBoard() {
         UserDto.CreateRequest req = new UserDto.CreateRequest();
         req.setEmail("chief@test.com");
         req.setPassword("pass");
@@ -52,11 +52,11 @@ class UserServiceTest {
         req.setRole(User.Role.SECTION_CHIEF);
         User user = userService.createUser(req);
 
-        assertThat(user.canCreateProject()).isTrue();
+        assertThat(user.canCreateBoard()).isTrue();
     }
 
     @Test
-    void projectMember_cannotCreateProject() {
+    void projectMember_cannotCreateBoard() {
         UserDto.CreateRequest req = new UserDto.CreateRequest();
         req.setEmail("mem@test.com");
         req.setPassword("pass");
@@ -64,7 +64,7 @@ class UserServiceTest {
         req.setRole(User.Role.PROJECT_MEMBER);
         User user = userService.createUser(req);
 
-        assertThat(user.canCreateProject()).isFalse();
+        assertThat(user.canCreateBoard()).isFalse();
     }
 
     @Test

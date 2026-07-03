@@ -40,7 +40,7 @@ public class User {
     private LocalDateTime createdAt;
 
     // 部長、科長、Leader 都可建立看板
-    public boolean canCreateProject() {
+    public boolean canCreateBoard() {
         return role == Role.DIRECTOR || role == Role.SECTION_CHIEF || role == Role.PROJECT_LEADER;
     }
 

@@ -31,7 +31,7 @@ public class UserDto {
         private String departmentName;
         private User.Role role;
         // 由 role 推算，供前端判斷是否顯示「建立看板」按鈕
-        private boolean canCreateProject;
+        private boolean canCreateBoard;
         private boolean enabled;
 
         public static Response from(User user) {
@@ -41,7 +41,7 @@ public class UserDto {
             r.displayName = user.getDisplayName();
             r.departmentName = user.getDepartment() != null ? user.getDepartment().getName() : null;
             r.role = user.getRole();
-            r.canCreateProject = user.canCreateProject();
+            r.canCreateBoard = user.canCreateBoard();
             r.enabled = user.isEnabled();
             return r;
         }
