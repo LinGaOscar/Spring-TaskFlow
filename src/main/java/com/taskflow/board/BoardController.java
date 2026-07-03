@@ -1,17 +1,22 @@
 package com.taskflow.board;
 
 import com.taskflow.common.ApiResponse;
+import com.taskflow.task.TaskDto;
+import com.taskflow.task.TaskExportService;
+import com.taskflow.task.TaskService;
 import com.taskflow.user.User;
 import com.taskflow.user.UserRepository;
 import jakarta.persistence.EntityNotFoundException;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.*;
+import java.nio.charset.StandardCharsets;
 import java.security.Principal;
 import java.time.LocalDate;
 import java.util.List;
@@ -24,6 +29,8 @@ public class BoardController {
     private final BoardService boardService;
     private final BoardMemberRepository memberRepository;
     private final UserRepository userRepository;
+    private final TaskService taskService;
+    private final TaskExportService exportService;
 
     // 返回 Thymeleaf 靜態殼頁，資料由前端 API 非同步載入
     @GetMapping("/boards")
@@ -141,6 +148,33 @@ public class BoardController {
         if (!boardService.canReadBoard(id, user)) {
             throw new SecurityException("無存取權限");
         }
+    }
+
+    // 匯出是唯讀操作：凡可檢視看板者（含歸檔、部長跨科唯讀）皆可使用
+    @GetMapping("/api/boards/{id}/export")
+    @ResponseBody
+    public ResponseEntity<byte[]> exportTasks(@PathVariable Long id,
+            @RequestParam(defaultValue = "json") String format,
+            @AuthenticationPrincipal UserDetails userDetails) {
+        checkBoardReadAccess(id, userDetails);
+        List<TaskDto.Response> tasks = taskService.listByBoard(id).stream()
+            .map(TaskDto.Response::from).toList();
+        String base = "board-" + id + "-tasks";
+        return switch (format) {
+            case "csv" -> download(exportService.toCsv(tasks).getBytes(StandardCharsets.UTF_8),
+                base + ".csv", "text/csv; charset=UTF-8");
+            case "xlsx" -> download(exportService.toXlsx(tasks), base + ".xlsx",
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+            default -> download(exportService.toJson(tasks).getBytes(StandardCharsets.UTF_8),
+                base + ".json", "application/json");
+        };
+    }
+
+    private ResponseEntity<byte[]> download(byte[] body, String filename, String contentType) {
+        return ResponseEntity.ok()
+            .header("Content-Disposition", "attachment; filename=\"" + filename + "\"")
+            .header("Content-Type", contentType)
+            .body(body);
     }
 
     // 科長可管理本科任何看板成員；看板負責人可管理自己的看板
