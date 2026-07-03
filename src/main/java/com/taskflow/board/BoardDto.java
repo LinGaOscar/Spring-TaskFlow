@@ -9,7 +9,6 @@ public class BoardDto {
     @Data
     public static class CreateRequest {
         @NotBlank private String name;
-        private Long departmentId;
     }
 
     @Data
