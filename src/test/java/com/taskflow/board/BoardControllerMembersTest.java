@@ -161,4 +161,43 @@ class BoardControllerMembersTest {
             .andExpect(status().isBadRequest())
             .andExpect(jsonPath("$.success").value(false));
     }
+
+    // 部長自建看板掛部層級，成員來自下屬科：部門樹父子判斷須放行，否則部長的成員管理形同虛設
+    @Test
+    @WithMockUser(username = "director@t.com")
+    void addMember_部長自建看板可加入子科成員() throws Exception {
+        Department division = new Department();
+        division.setName("測試部");
+        departmentRepository.save(division);
+
+        Department childSection = new Department();
+        childSection.setName("下屬科");
+        childSection.setParent(division);
+        departmentRepository.save(childSection);
+
+        User director = userRepository.findByEmail("director@t.com").orElseThrow();
+        director.setDepartment(division);
+        userRepository.save(director);
+
+        User sectionMember = new User();
+        sectionMember.setEmail("secmember@t.com");
+        sectionMember.setPasswordHash("x");
+        sectionMember.setDisplayName("子科成員");
+        sectionMember.setRole(User.Role.PROJECT_MEMBER);
+        sectionMember.setDepartment(childSection);
+        userRepository.save(sectionMember);
+
+        Board directorBoard = new Board();
+        directorBoard.setName("部長的看板");
+        directorBoard.setDepartment(division);
+        directorBoard.setOwner(director);
+        boardRepository.save(directorBoard);
+
+        mockMvc.perform(post("/api/boards/{id}/members", directorBoard.getId())
+                .with(csrf())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"userId\":" + sectionMember.getId() + "}"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.success").value(true));
+    }
 }

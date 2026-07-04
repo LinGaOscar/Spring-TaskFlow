@@ -207,13 +207,22 @@ public class BoardController {
         Long targetUserId = body.get("userId");
         User targetUser = userRepository.findById(targetUserId)
             .orElseThrow(() -> new EntityNotFoundException("使用者不存在"));
-        // 成員必須與看板同科，避免跨科帳號被加入看板成員造成部門隔離被繞過
-        if (board.getDepartment() == null || targetUser.getDepartment() == null
-            || !board.getDepartment().getId().equals(targetUser.getDepartment().getId())) {
+        if (!memberDeptCompatible(board, targetUser)) {
             throw new IllegalArgumentException("成員必須為本科帳號");
         }
         boardService.addMember(id, targetUserId, caller.getId());
         return ApiResponse.ok(null);
+    }
+
+    // 成員部門相容性：與看板同部門，或成員所屬科的上級部即為看板掛載的部——
+    // 部長自建看板掛部層級，成員來自下屬科（比照 canReadBoard 的部門樹父子邏輯）；
+    // 跨科（科A看板加科B帳號）仍被拒，維持部門隔離
+    private boolean memberDeptCompatible(Board board, User target) {
+        if (board.getDepartment() == null || target.getDepartment() == null) return false;
+        Long boardDeptId = board.getDepartment().getId();
+        if (boardDeptId.equals(target.getDepartment().getId())) return true;
+        return target.getDepartment().getParent() != null
+            && target.getDepartment().getParent().getId().equals(boardDeptId);
     }
 
     // 移除成員後立即失去 WBS 編輯權限
@@ -254,9 +263,8 @@ public class BoardController {
         Long newOwnerId = body.get("userId");
         User newOwner = userRepository.findById(newOwnerId)
             .orElseThrow(() -> new EntityNotFoundException("使用者不存在"));
-        // 新負責人必須與看板同科，避免跨科指派負責人造成部門隔離被繞過
-        if (board.getDepartment() == null || newOwner.getDepartment() == null
-            || !board.getDepartment().getId().equals(newOwner.getDepartment().getId())) {
+        // 新負責人的部門相容性與成員規則一致（同部門或下屬科），防跨科指派繞過部門隔離
+        if (!memberDeptCompatible(board, newOwner)) {
             throw new IllegalArgumentException("負責人必須為本科帳號");
         }
         boardService.changeOwner(id, newOwnerId);

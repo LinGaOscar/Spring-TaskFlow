@@ -30,8 +30,8 @@ public class UserController {
     }
 
     // 成員管理限科內帳號：只回傳呼叫者本科（同 department）的啟用帳號，避免跨科帳號被
-    // 誤加入本科看板成員（部門隔離旁路）。DIRECTOR 掛在部層級，這裡僅回傳同 department（部本身，
-    // 不含子科），與看板成員的同科驗證邏輯一致，也是最簡單的實作方式
+    // 誤加入本科看板成員（部門隔離旁路）。部長掛在部層級、看板成員來自下屬科，
+    // 故 DIRECTOR 回傳本部＋所有子科帳號（與 addMember 的部門樹父子驗證一致）
     @GetMapping("/api/users")
     @ResponseBody
     public ApiResponse<List<UserDto.Response>> listUsers(
@@ -41,8 +41,16 @@ public class UserController {
         if (caller.getDepartment() == null) {
             return ApiResponse.ok(List.of());
         }
-        return ApiResponse.ok(userService.listUsers(caller.getDepartment().getId()).stream()
-            .map(UserDto.Response::from).toList());
+        List<User> users;
+        if (caller.getRole() == User.Role.DIRECTOR) {
+            List<Long> sectionIds = departmentRepository
+                .findByParentId(caller.getDepartment().getId())
+                .stream().map(Department::getId).toList();
+            users = userService.listUsersForDivision(caller.getDepartment().getId(), sectionIds);
+        } else {
+            users = userService.listUsers(caller.getDepartment().getId());
+        }
+        return ApiResponse.ok(users.stream().map(UserDto.Response::from).toList());
     }
 
     @GetMapping("/api/departments")

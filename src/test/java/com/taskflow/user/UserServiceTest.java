@@ -60,4 +60,24 @@ class UserServiceTest {
 
         assertThat(result).extracting(User::getEmail).containsExactly("active@t.com");
     }
+
+    // 部長掛部層級、看板成員來自下屬科：清單須含本部與所有子科帳號，但不含無關部門
+    @Test
+    void listUsersForDivision_含本部與子科帳號() {
+        Department division = new Department();
+        division.setName("資訊部");
+        deptRepository.save(division);
+        deptA.setParent(division);
+        deptRepository.save(deptA);
+
+        saveUser("director@t.com", division, true);
+        saveUser("section@t.com", deptA, true);
+        saveUser("other@t.com", deptB, true);   // 無關部門，不應出現
+
+        var result = userService.listUsersForDivision(
+            division.getId(), java.util.List.of(deptA.getId()));
+
+        assertThat(result).extracting(User::getEmail)
+            .containsExactlyInAnyOrder("director@t.com", "section@t.com");
+    }
 }
