@@ -1,0 +1,28 @@
+# Docker build 只需 pom.xml 與 src/（見 Dockerfile），其餘排除以縮小 build context、加速建置
+# 建置產物（映像檔內會重新 mvn package）
+target/
+
+# 版本控制與機密
+.git/
+.gitignore
+.env
+.env.example
+
+# 本機工具與制度檔（push 放行標記、SDD 暫存、巡檢截圖）
+.claude/
+.superpowers/
+screenshot/
+
+# 文件（不影響執行）
+docs/
+*.md
+
+# 資料庫初始化腳本（由 docker-compose 掛載進 db 容器，非 app 映像檔所需）
+db/
+
+# 其他
+.DS_Store
+.idea/
+.vscode/
+docker-compose.yml
+Dockerfile
