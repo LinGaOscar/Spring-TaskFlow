@@ -1,4 +1,3 @@
-version: '3.8'
 services:
   db:
     image: mcr.microsoft.com/mssql/server:2022-latest
@@ -11,13 +10,26 @@ services:
       - ./db/mssql:/init
     entrypoint: /bin/bash /init/entrypoint.sh
     healthcheck:
-      test: ["CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P \"$${SA_PASSWORD}\" -Q 'SELECT 1' -C"]
+      # 查 users 表而非 SELECT 1：確保 schema 與種子資料已建好，app 才會被放行連上
+      test: ["CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P \"$${SA_PASSWORD}\" -d taskflow -Q 'SELECT TOP 1 id FROM users' -C"]
       interval: 10s
       timeout: 5s
-      retries: 10
+      retries: 15
       start_period: 40s
     ports:
       - "1433:1433"
+
+  app:
+    build: .
+    depends_on:
+      db:
+        condition: service_healthy   # 等 DB schema 就緒再啟動，避免建表前就連上
+    environment:
+      MSSQL_SA_PASSWORD: "${MSSQL_SA_PASSWORD}"
+      # 容器內連不到 localhost，覆寫 datasource host 為 compose 服務名 db（Spring relaxed binding）
+      SPRING_DATASOURCE_URL: "jdbc:sqlserver://db:1433;databaseName=taskflow;encrypt=false;trustServerCertificate=true"
+    ports:
+      - "8050:8050"
 
 volumes:
   mssqldata:

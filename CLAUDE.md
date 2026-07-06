@@ -9,21 +9,25 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## 常用指令
 
 ```bash
-# 啟動資料庫（首次自動跑 db/mssql/ 的 schema 與種子資料）
 cp .env.example .env          # 設定 MSSQL_SA_PASSWORD（需符合 SQL Server 複雜度）
-docker compose up -d          # 等 log 出現 ">>> 初始化完成"（約 60-90s）
+
+# Docker 一鍵起整套（db + app，多階段建置，本機免裝 Maven）
+docker compose up --build -d  # http://localhost:8050
+
+# 或本機開發：只用 Docker 起 DB，app 跑本機（可熱重載/除錯）
+docker compose up -d db       # 等 log 出現 ">>> 初始化完成"（約 60-90s）
+mvn spring-boot:run           # spring-dotenv 自動讀 .env，連 localhost:1433
 
 # 重置資料庫（schema/種子資料改動後必做，因為不用 JPA ddl-auto）
-docker compose down -v && docker compose up -d
-
-# 執行應用（spring-dotenv 自動讀 .env）
-mvn spring-boot:run           # http://localhost:8080
+docker compose down -v && docker compose up --build -d
 
 # 測試（走 H2 記憶體庫，不需 Docker）
 mvn test                      # 全部
 mvn test -Dtest=TaskServiceTest                       # 單一測試類別
 mvn test -Dtest=TaskServiceTest#跨欄移動_改變狀態並插入指定位置   # 單一測試方法
 ```
+
+部署與環境變數細節見 `docs/dev.md`。
 
 測試帳號密碼皆為 `test1234`（見 `db/mssql/02-seed.sql`），關鍵帳號：`chief@infotech.com`（科長）、`director@company.com`（部長）、`member1@infotech.com`（成員）。
 
