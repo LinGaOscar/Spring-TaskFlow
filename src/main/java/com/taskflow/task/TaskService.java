@@ -31,6 +31,14 @@ public class TaskService {
         return taskRepository.findByBoardIdOrderByStatusAscSortOrderAsc(boardId);
     }
 
+    // DTO 轉換須在交易內完成：WebSocket 執行緒無 open-in-view，若在交易外做
+    // TaskDto.Response.from 會在存取 LAZY 的 assignee 時拋 LazyInitializationException
+    @Transactional(readOnly = true)
+    public List<TaskDto.Response> listResponsesByBoard(Long boardId) {
+        return taskRepository.findByBoardIdOrderByStatusAscSortOrderAsc(boardId)
+            .stream().map(TaskDto.Response::from).toList();
+    }
+
     @Transactional
     public Task createTask(Long boardId, TaskDto.SaveRequest req, User caller) {
         checkWrite(boardId, caller);

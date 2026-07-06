@@ -166,8 +166,8 @@ public class BoardController {
             @RequestParam(defaultValue = "json") String format,
             @AuthenticationPrincipal UserDetails userDetails) {
         checkBoardReadAccess(id, userDetails);
-        List<TaskDto.Response> tasks = taskService.listByBoard(id).stream()
-            .map(TaskDto.Response::from).toList();
+        // 交易內轉換，DTO 映射不依賴 open-in-view
+        List<TaskDto.Response> tasks = taskService.listResponsesByBoard(id);
         String base = "board-" + id + "-tasks";
         return switch (format) {
             case "csv" -> download(exportService.toCsv(tasks).getBytes(StandardCharsets.UTF_8),

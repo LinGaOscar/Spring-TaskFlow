@@ -27,7 +27,7 @@ public class TaskController {
         if (!boardService.canReadBoard(boardId, user)) {
             throw new SecurityException("無檢視此看板的權限");
         }
-        return ApiResponse.ok(
-            taskService.listByBoard(boardId).stream().map(TaskDto.Response::from).toList());
+        // 用交易內轉換方法，DTO 映射不依賴 open-in-view（與 WebSocket 廣播路徑一致）
+        return ApiResponse.ok(taskService.listResponsesByBoard(boardId));
     }
 }

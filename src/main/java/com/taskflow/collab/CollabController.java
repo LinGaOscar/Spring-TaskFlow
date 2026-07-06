@@ -86,8 +86,8 @@ public class CollabController {
         User user = resolve(principal);
         checkWrite(boardId, user);
         taskService.moveTask(boardId, taskId, req, user);
-        var snapshot = taskService.listByBoard(boardId).stream()
-            .map(TaskDto.Response::from).toList();
+        // 在交易內完成 DTO 轉換，避免 WebSocket 執行緒無 OSIV 時存取 LAZY assignee 拋例外
+        var snapshot = taskService.listResponsesByBoard(boardId);
         broadcast(boardId, TaskChangeMessage.Type.TASK_MOVE, taskId, snapshot, user);
     }
 
