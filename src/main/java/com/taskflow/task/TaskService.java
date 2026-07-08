@@ -93,6 +93,15 @@ public class TaskService {
         taskRepository.delete(getInBoard(boardId, taskId));
     }
 
+    // 成員被移出看板時清掉其被指派的任務：否則卡片停留在無效指派，
+    // 之後編輯會被 applyFields 的「負責人必須是成員」擋下（能拖不能改）
+    @Transactional
+    public void unassignFromBoard(Long boardId, Long userId) {
+        List<Task> assigned = taskRepository.findByBoardIdAndAssigneeId(boardId, userId);
+        assigned.forEach(t -> t.setAssignee(null));
+        taskRepository.saveAll(assigned);
+    }
+
     // 任務必須屬於指定看板，防止以其他看板 ID 繞過權限檢查（IDOR）
     private Task getInBoard(Long boardId, Long taskId) {
         Task t = taskRepository.findById(taskId)

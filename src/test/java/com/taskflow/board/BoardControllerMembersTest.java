@@ -200,4 +200,31 @@ class BoardControllerMembersTest {
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.success").value(true));
     }
+
+    // 歸檔＝全員唯讀必須延伸到成員管理：對已歸檔看板新增成員應被拒（403），
+    // 而非只擋任務編輯（先前 REST 端點漏了此檢查）
+    @Test
+    @WithMockUser(username = "chief@t.com")
+    void addMember_歸檔看板_被拒() throws Exception {
+        User newMember = new User();
+        newMember.setEmail("newbie@t.com");
+        newMember.setPasswordHash("x");
+        newMember.setDisplayName("新成員");
+        newMember.setRole(User.Role.PROJECT_MEMBER);
+        newMember.setDepartment(userRepository.findByEmail("chief@t.com").orElseThrow().getDepartment());
+        userRepository.save(newMember);
+
+        Board boardA = boardRepository.findAll().stream()
+            .filter(b -> b.getName().equals("Leader A 的看板"))
+            .findFirst().orElseThrow();
+        boardA.setArchived(true);
+        boardRepository.save(boardA);
+
+        mockMvc.perform(post("/api/boards/{id}/members", boardA.getId())
+                .with(csrf())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"userId\":" + newMember.getId() + "}"))
+            .andExpect(status().isForbidden())
+            .andExpect(jsonPath("$.success").value(false));
+    }
 }

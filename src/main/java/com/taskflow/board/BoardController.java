@@ -7,6 +7,7 @@ import com.taskflow.task.TaskService;
 import com.taskflow.user.User;
 import com.taskflow.user.UserRepository;
 import jakarta.persistence.EntityNotFoundException;
+import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
@@ -69,7 +70,8 @@ public class BoardController {
 
     // 看板頁：SSR 只出骨架與權限旗標，任務資料由前端 REST/WebSocket 載入
     @GetMapping("/boards/{id}")
-    public String detail(@PathVariable Long id, Model model, Principal principal) {
+    public String detail(@PathVariable Long id, Model model, Principal principal,
+                         HttpServletResponse response) {
         User user = userRepository.findByEmail(principal.getName()).orElseThrow();
         try {
             if (!boardService.canReadBoard(id, user)) {
@@ -81,6 +83,8 @@ public class BoardController {
             model.addAttribute("currentUserId", user.getId());
             return "board/detail";
         } catch (EntityNotFoundException e) {
+            // 自訂 404 頁需連帶回 404 狀態碼，而非預設的 200（否則爬蟲/前端誤判為正常頁）
+            response.setStatus(HttpServletResponse.SC_NOT_FOUND);
             return "error/404";
         }
     }
@@ -186,6 +190,22 @@ public class BoardController {
             .body(body);
     }
 
+    // 成員/負責人管理權限：科長（本科）或看板負責人，且看板未歸檔。
+    // 歸檔＝全員唯讀，成員與負責人變更也必須凍結（與 canWriteBoard 的歸檔唯讀一致）。
+    private void checkCanManageMembers(Board board, User caller) {
+        boolean isSectionChief = caller.getRole() == User.Role.SECTION_CHIEF
+            && board.getDepartment() != null
+            && board.getDepartment().getId().equals(caller.getDepartment().getId());
+        boolean isBoardOwner = board.getOwner() != null
+            && board.getOwner().getId().equals(caller.getId());
+        if (!isSectionChief && !isBoardOwner) {
+            throw new SecurityException("只有科長或看板負責人才可管理成員");
+        }
+        if (board.isArchived()) {
+            throw new SecurityException("看板已歸檔，無法變更成員或負責人");
+        }
+    }
+
     // 科長可管理本科任何看板成員；看板負責人可管理自己的看板
     @PostMapping("/api/boards/{id}/members")
     @ResponseBody
@@ -196,14 +216,7 @@ public class BoardController {
         User caller = userRepository.findByEmail(userDetails.getUsername())
             .orElseThrow(() -> new EntityNotFoundException("使用者不存在"));
         Board board = boardService.getById(id);
-        // 科長可管理本科任何看板成員；看板負責人可管理自己的看板
-        boolean isSectionChief = caller.getRole() == User.Role.SECTION_CHIEF
-            && board.getDepartment() != null
-            && board.getDepartment().getId().equals(caller.getDepartment().getId());
-        boolean isBoardOwner = board.getOwner().getId().equals(caller.getId());
-        if (!isSectionChief && !isBoardOwner) {
-            throw new SecurityException("只有科長或看板負責人才可管理成員");
-        }
+        checkCanManageMembers(board, caller);
         Long targetUserId = body.get("userId");
         User targetUser = userRepository.findById(targetUserId)
             .orElseThrow(() -> new EntityNotFoundException("使用者不存在"));
@@ -235,14 +248,10 @@ public class BoardController {
         User caller = userRepository.findByEmail(userDetails.getUsername())
             .orElseThrow(() -> new EntityNotFoundException("使用者不存在"));
         Board board = boardService.getById(id);
-        boolean isSectionChief = caller.getRole() == User.Role.SECTION_CHIEF
-            && board.getDepartment() != null
-            && board.getDepartment().getId().equals(caller.getDepartment().getId());
-        boolean isBoardOwner = board.getOwner().getId().equals(caller.getId());
-        if (!isSectionChief && !isBoardOwner) {
-            throw new SecurityException("只有科長或看板負責人才可移除成員");
-        }
+        checkCanManageMembers(board, caller);
         boardService.removeMember(id, userId);
+        // 移除成員後清掉其在本看板被指派的任務，避免卡片停在「能拖不能改」的無效指派狀態
+        taskService.unassignFromBoard(id, userId);
         return ApiResponse.ok(null);
     }
 
@@ -255,11 +264,7 @@ public class BoardController {
             @AuthenticationPrincipal UserDetails userDetails) {
         User caller = userRepository.findByEmail(userDetails.getUsername()).orElseThrow();
         Board board = boardService.getById(id);
-        boolean isSectionChief = caller.getRole() == User.Role.SECTION_CHIEF
-            && board.getDepartment() != null
-            && board.getDepartment().getId().equals(caller.getDepartment().getId());
-        boolean isBoardOwner = board.getOwner().getId().equals(caller.getId());
-        if (!isSectionChief && !isBoardOwner) throw new SecurityException("無權變更負責人");
+        checkCanManageMembers(board, caller);
         Long newOwnerId = body.get("userId");
         User newOwner = userRepository.findById(newOwnerId)
             .orElseThrow(() -> new EntityNotFoundException("使用者不存在"));

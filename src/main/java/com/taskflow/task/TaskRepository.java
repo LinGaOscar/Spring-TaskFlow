@@ -6,4 +6,5 @@ import java.util.List;
 public interface TaskRepository extends JpaRepository<Task, Long> {
     List<Task> findByBoardIdOrderByStatusAscSortOrderAsc(Long boardId);
     List<Task> findByBoardIdAndStatusOrderBySortOrderAsc(Long boardId, Task.Status status);
+    List<Task> findByBoardIdAndAssigneeId(Long boardId, Long assigneeId);
 }

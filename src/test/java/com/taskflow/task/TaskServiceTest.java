@@ -168,4 +168,19 @@ class TaskServiceTest {
         assertThatThrownBy(() -> taskService.deleteTask(board.getId(), t.getId(), chief))
             .isInstanceOf(SecurityException.class);
     }
+
+    @Test
+    void 移除成員後_其被指派任務清空負責人() {
+        // member 為看板成員，先建立指派給他的任務
+        TaskDto.SaveRequest req = save("指派給 member");
+        req.setAssigneeId(member.getId());
+        Task t = taskService.createTask(board.getId(), req, chief);
+        assertThat(t.getAssignee()).isNotNull();
+
+        // 成員被移出看板後，清掉其在本看板的指派，避免任務停在「能拖不能改」
+        taskService.unassignFromBoard(board.getId(), member.getId());
+
+        Task after = taskService.listByBoard(board.getId()).get(0);
+        assertThat(after.getAssignee()).isNull();
+    }
 }

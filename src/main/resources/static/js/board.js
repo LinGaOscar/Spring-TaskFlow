@@ -35,8 +35,10 @@ window.boardPage = createApp({
         },
         isOverdue(t) {
             // 已完成的任務不再警示逾期，避免歷史卡片一片紅
-            return t.dueDate && t.status !== 'DONE'
-                && t.dueDate < new Date().toISOString().slice(0, 10);
+            // 用本地日期比對：toISOString 是 UTC，UTC+8 深夜前後會誤差一天
+            const now = new Date();
+            const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+            return t.dueDate && t.status !== 'DONE' && t.dueDate < today;
         },
         exportUrl(fmt) { return `/api/boards/${boardId}/export?format=${fmt}`; },
         async loadAll() {

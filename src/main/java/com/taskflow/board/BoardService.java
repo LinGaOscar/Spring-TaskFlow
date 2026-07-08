@@ -42,6 +42,8 @@ public class BoardService {
     public List<Board> listForUser(User user, boolean archived) {
         return switch (user.getRole()) {
             case DIRECTOR -> {
+                // 部長無所屬部門時無可見範圍（schema 允許 department 為 null，防禦性處理）
+                if (user.getDepartment() == null) yield List.of();
                 // 部長可查看直屬部的看板，以及所有子科的看板
                 List<Board> own = boardRepository.findByDepartmentIdAndArchived(
                     user.getDepartment().getId(), archived);
@@ -77,6 +79,8 @@ public class BoardService {
     public void archiveBoard(Long boardId, User caller) {
         Board p = getById(boardId);
         checkArchivePermission(p, caller);
+        // 冪等：已歸檔則不重設 archivedAt，避免重複歸檔刷新歸檔時間、擾亂歷史日期查詢
+        if (p.isArchived()) return;
         p.setArchived(true);
         p.setArchivedAt(java.time.LocalDateTime.now());
         boardRepository.save(p);
@@ -87,6 +91,7 @@ public class BoardService {
     public void unarchiveBoard(Long boardId, User caller) {
         Board p = getById(boardId);
         checkArchivePermission(p, caller);
+        if (!p.isArchived()) return;   // 冪等：未歸檔則不動作
         p.setArchived(false);
         p.setArchivedAt(null);
         boardRepository.save(p);
@@ -170,7 +175,7 @@ public class BoardService {
         Board board = getById(boardId);
         return switch (user.getRole()) {
             case DIRECTOR -> {
-                if (board.getDepartment() == null) yield false;
+                if (board.getDepartment() == null || user.getDepartment() == null) yield false;
                 Department dept = board.getDepartment();
                 // 直接屬於本部，或屬於本部的子科
                 yield dept.getId().equals(user.getDepartment().getId())

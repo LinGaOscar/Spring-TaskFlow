@@ -116,6 +116,22 @@ class BoardServiceTest {
         assertThat(byDate).isEmpty();
     }
 
+    @Test
+    void 重複歸檔_不刷新歸檔時間() {
+        BoardDto.CreateRequest req = new BoardDto.CreateRequest();
+        req.setName("冪等測試看板");
+        Board board = boardService.createBoard(req, manager.getId());
+
+        boardService.archiveBoard(board.getId(), manager);
+        var firstArchivedAt = boardRepository.findById(board.getId()).orElseThrow().getArchivedAt();
+        assertThat(firstArchivedAt).isNotNull();
+
+        // 再次歸檔應為 no-op，不得刷新 archivedAt（否則擾亂歷史日期查詢）
+        boardService.archiveBoard(board.getId(), manager);
+        var secondArchivedAt = boardRepository.findById(board.getId()).orElseThrow().getArchivedAt();
+        assertThat(secondArchivedAt).isEqualTo(firstArchivedAt);
+    }
+
     // ===== 權限矩陣測試 =====
 
     @Test

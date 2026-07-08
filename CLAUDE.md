@@ -62,6 +62,16 @@ Thymeleaf 出「頁面殼 + 權限旗標」，Vue 3 掛 `#board-app` 負責互�
 
 正式環境 **SQL Server**，schema 手寫在 `db/mssql/01-schema.sql`（**不用** JPA `ddl-auto`，也不用 Flyway/Liquibase），改 schema 後要 `docker compose down -v` 重置。測試用 **H2 記憶體庫**（`application-test.yml`，`@ActiveProfiles("test")`，`ddl-auto: create-drop`）。種子資料只建部門/帳號/系統模板，不建業務資料。
 
+## 跨功能不變式與已知陷阱
+
+改動涉及看板、任務、成員、歸檔任一子系統前，先確認這些跨功能的一致性點：
+
+- **「歸檔＝全員唯讀」貫穿任務與成員兩條路**：任務編輯靠 `canWriteBoard`（歸檔一律 false）；成員/負責人變更靠 `BoardController.checkCanManageMembers`（含 `board.isArchived()` 守衛，歸檔則丟 `SecurityException`→403）。動到成員/歸檔時，這兩處都要維持歸檔凍結，別只擋一邊。
+- **移除成員會連帶清掉其在該看板的任務指派**：`BoardController.removeMember` 呼叫 `boardService.removeMember` 後再 `taskService.unassignFromBoard`，避免任務停在無效指派（`applyFields` 會擋「assignee 必須是成員」）。新增「移除成員」相關邏輯時要保留這個連帶清理。
+- **`board.getOwner()` / `user.getDepartment()` 的 null 防禦**：schema 允許 `owner_id`/`department_id` 為 null。權限判斷處（`checkCanManageMembers`、`canReadBoard`/`listForUser` 的 DIRECTOR 分支）都先 null 檢查再比對；新增比對邏輯時沿用此防禦寫法。
+- **WebSocket 廣播路徑的 DTO 轉換必須在交易內**：`onTaskMove` 用 `taskService.listResponsesByBoard`（`@Transactional`）而非在 controller 裡 `.map(from)`，否則 WS 執行緒無 OSIV，存取 LAZY 的 `assignee` 會拋 `LazyInitializationException`（僅「有指派負責人」的任務觸發，易被未指派任務的測試漏掉——見 `TaskSnapshotTest`）。`onTaskCreate`/`onTaskUpdate` 因 `applyFields` 會把 assignee 換成已載入實體或 null 而安全。
+- **歸檔/還原是冪等的**：`archiveBoard`/`unarchiveBoard` 對已在目標狀態者直接 return，不重刷 `archivedAt`（避免擾亂歷史日期查詢）。
+
 ## 慣例
 
 - 註解一律**繁體中文**，說明業務「Why」而非「What」；不留 `TODO`
